@@ -70,36 +70,41 @@ function SpecNode({ spec, onOpen, onEdit, onDelete }: NodeProps) {
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') onOpen();
       }}
-      className="group relative w-56 rounded-lg border border-zinc-800 bg-zinc-950 hover:border-zinc-600 hover:bg-zinc-900/60 transition p-3 cursor-pointer"
+      className="group min-w-[16rem] max-w-[28rem] rounded-lg border border-zinc-800 bg-zinc-950 hover:border-zinc-600 hover:bg-zinc-900/60 transition p-3 cursor-pointer"
     >
-      <div className="absolute top-1.5 right-1.5 flex gap-0.5 opacity-0 group-hover:opacity-100 transition">
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onEdit();
-          }}
-          className="px-1.5 py-0.5 text-[10px] rounded text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800"
-        >
-          edit
-        </button>
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onDelete();
-          }}
-          className="px-1.5 py-0.5 text-[10px] rounded text-zinc-500 hover:text-red-400 hover:bg-red-950/40"
-        >
-          delete
-        </button>
-      </div>
-      <div className="text-sm font-medium leading-snug pr-10 line-clamp-2 break-words">
+      <div
+        className="text-sm font-medium leading-snug truncate"
+        title={spec.title}
+      >
         {spec.title}
       </div>
-      <div className="mt-2 flex items-center gap-2">
-        <StatusBadge status={spec.status} />
-        <span className="text-[11px] text-zinc-400">
-          {spec.tasks.length} {spec.tasks.length === 1 ? 'task' : 'tasks'}
-        </span>
+      <div className="mt-2 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 min-w-0">
+          <StatusBadge status={spec.status} />
+          <span className="text-[11px] text-zinc-400 whitespace-nowrap">
+            {spec.tasks.length} {spec.tasks.length === 1 ? 'task' : 'tasks'}
+          </span>
+        </div>
+        <div className="flex items-center gap-0.5 shrink-0">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onEdit();
+            }}
+            className="px-1.5 py-0.5 text-[10px] rounded text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800 transition"
+          >
+            edit
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete();
+            }}
+            className="px-1.5 py-0.5 text-[10px] rounded text-zinc-500 hover:text-red-400 hover:bg-red-950/40 transition"
+          >
+            delete
+          </button>
+        </div>
       </div>
     </div>
   );

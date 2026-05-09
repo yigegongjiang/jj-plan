@@ -26,33 +26,37 @@ export default function ProjectsList({ projects, onOpen, onDelete }: Props) {
           <button
             key={p.name}
             onClick={() => onOpen(p.name)}
-            className="group text-left rounded-lg border border-zinc-800 bg-zinc-950 hover:border-zinc-700 hover:bg-zinc-900/60 transition p-4 relative"
+            className="group text-left rounded-lg border border-zinc-800 bg-zinc-950 hover:border-zinc-700 hover:bg-zinc-900/60 transition p-4 flex flex-col gap-1"
           >
-            <span
-              role="button"
-              tabIndex={0}
-              onClick={(e) => {
-                e.stopPropagation();
-                onDelete(p);
-              }}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.stopPropagation();
-                  onDelete(p);
-                }
-              }}
-              className="absolute top-2.5 right-2.5 px-2 py-0.5 text-[11px] rounded text-zinc-400 hover:text-red-400 hover:bg-red-950/40 transition opacity-0 group-hover:opacity-100"
-              aria-label={`delete project ${p.name}`}
-            >
-              delete
-            </span>
-            <div className="font-medium truncate pr-12">{p.name}</div>
-            <div className="text-xs text-zinc-500 mt-1">
+            <div className="font-medium truncate" title={p.name}>
+              {p.name}
+            </div>
+            <div className="text-xs text-zinc-500">
               {p.specs.length} {p.specs.length === 1 ? 'spec' : 'specs'} ·{' '}
               {taskCount} {taskCount === 1 ? 'task' : 'tasks'}
             </div>
-            <div className="text-[11px] text-zinc-400 mt-2 font-mono">
-              updated {fmtTime(p.updated_at)}
+            <div className="mt-1 flex items-center justify-between gap-2">
+              <span className="text-[11px] text-zinc-400 font-mono truncate">
+                updated {fmtTime(p.updated_at)}
+              </span>
+              <span
+                role="button"
+                tabIndex={0}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDelete(p);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.stopPropagation();
+                    onDelete(p);
+                  }
+                }}
+                className="shrink-0 px-2 py-0.5 text-[11px] rounded text-zinc-500 hover:text-red-400 hover:bg-red-950/40 transition cursor-pointer"
+                aria-label={`delete project ${p.name}`}
+              >
+                delete
+              </span>
             </div>
           </button>
         );

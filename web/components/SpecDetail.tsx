@@ -151,7 +151,7 @@ function TaskNode({ task, seq, total, isSelected, onClick }: NodeProps) {
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') onClick();
       }}
-      className={`relative w-48 rounded-lg border bg-zinc-950 transition p-3 cursor-pointer ${
+      className={`relative min-w-[14rem] max-w-[24rem] rounded-lg border bg-zinc-950 transition p-3 cursor-pointer ${
         isSelected
           ? 'border-blue-500 bg-blue-950/20'
           : 'border-zinc-800 hover:border-zinc-600 hover:bg-zinc-900/60'
@@ -160,7 +160,10 @@ function TaskNode({ task, seq, total, isSelected, onClick }: NodeProps) {
       <div className="flex items-center gap-2 text-[10px] text-zinc-400 font-mono tabular-nums">
         {seq}/{total}
       </div>
-      <div className="mt-1 text-sm font-medium leading-snug line-clamp-2 break-words">
+      <div
+        className="mt-1 text-sm font-medium leading-snug truncate"
+        title={task.title}
+      >
         {task.title}
       </div>
       <div className="mt-2">
