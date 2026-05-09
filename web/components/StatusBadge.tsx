@@ -1,7 +1,6 @@
 import type { SpecStatus, TaskStatus } from '@/lib/types';
 
 const COLOR: Record<SpecStatus | TaskStatus, string> = {
-  draft: 'bg-zinc-800/60 text-zinc-400 border-zinc-700',
   todo: 'bg-zinc-800/60 text-zinc-400 border-zinc-700',
   active: 'bg-blue-950/60 text-blue-300 border-blue-900',
   doing: 'bg-blue-950/60 text-blue-300 border-blue-900',

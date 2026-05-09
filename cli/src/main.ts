@@ -27,7 +27,7 @@ const CONFIG_PATH = join(homedir(), '.jjplan', 'config.json');
 const INSTALL_URL =
   'https://raw.githubusercontent.com/yangfan-elestyle/jj-plan/main/install.sh';
 
-const SPEC_STATUSES = ['draft', 'active', 'done'] as const;
+const SPEC_STATUSES = ['active', 'done'] as const;
 const TASK_STATUSES = ['todo', 'doing', 'done', 'blocked'] as const;
 const MAX_TITLE_LEN = 200;
 const MAX_BODY_LEN = 65536;
@@ -388,7 +388,7 @@ function printHelp(): void {
 
 # PURPOSE
 Spec/Task 计划跟踪 CLI, 专为 AI 调用设计. 数据存远端 Cloudflare D1, 本地是无状态客户端.
-工作循环: 接需求 -> 写 SPEC -> 拆 TASK -> 推 status (todo->doing->done) -> SPEC 收尾.
+工作循环: 接需求 -> 写 SPEC (默认 active) -> 拆 TASK -> 推 status (todo->doing->done) -> SPEC 切 done.
 
 # DATA MODEL
 project (name, 主键)
@@ -424,10 +424,10 @@ jjplan project rm <name>
 
 # SPEC
 jjplan spec new <project> <title> [--after <prev_spec_id>]
-  在 project 下新建 spec; status 固定为 \`draft\`; body 从 stdin 读.
+  在 project 下新建 spec; status 固定为 \`active\`; body 从 stdin 读.
   推荐 body 结构: ## 背景 / ## 目标 / ## 方案 / ## 兼容性.
   --after: 接在 prev_spec_id 之后; prev 必须同项目且尚无后继.
-  -> {id, project_id, title, body, status:"draft", prev_id, created_at, updated_at}
+  -> {id, project_id, title, body, status:"active", prev_id, created_at, updated_at}
   错误: 400 prev 跨项目/不存在 | 409 prev 已有后继.
 
 jjplan spec ls <project>
@@ -471,10 +471,10 @@ jjplan task rm <id>
 
 # STATUS 语义与流转
 spec
-  draft   刚 spec new, 仍在规划; 可反复 spec set 修订 title/body.
-  active  已开始执行 (推荐: 创建首个 task 时一并切到 active).
+  active  默认状态; 含 "刚立项, 仍在写 body" 与 "已开始执行" 两种情形, 不再区分.
+          可反复 spec set 修订 title/body. 拆 task / 推进均无需切换状态.
   done    语义完成态; 所有 task 已 done 后再切.
-  推荐流: draft -> active -> done.
+  推荐流: active -> done.
 
 task
   todo    待办. 默认状态.
@@ -502,7 +502,7 @@ task
 3. spec 整体切 done 必须在其所有 task 都已 done 之后.
 
 # TYPICAL FLOW
-# 1. 接需求, 写 SPEC (body 从 stdin)
+# 1. 接需求, 写 SPEC (body 从 stdin); 创建即 active, 无需手动切状态
 cat <<'MD' | jjplan spec new myrepo "添加 GitHub OAuth 登录"
 ## 背景
 现有仅密码登录.
@@ -515,12 +515,9 @@ cat <<'MD' | jjplan spec new myrepo "添加 GitHub OAuth 登录"
 ## 兼容性
 旧 token 继续有效.
 MD
-# -> {"id":"01HX...","status":"draft",...}
+# -> {"id":"01HX...","status":"active",...}
 
-# 2. 切 active, 开始拆 task
-jjplan spec set 01HX... --status active
-
-# 3. 拆 task (body 从 stdin)
+# 2. 拆 task (body 从 stdin)
 cat <<'MD' | jjplan task new 01HX... "schema: oauth_tokens 表"
 1. 写 worker/migrations/0002_oauth.sql
 2. wrangler d1 migrations apply
@@ -528,12 +525,12 @@ cat <<'MD' | jjplan task new 01HX... "schema: oauth_tokens 表"
 MD
 # -> {"id":"01HY...","status":"todo",...}
 
-# 4. 推进 task
+# 3. 推进 task
 jjplan task set 01HY... --status doing
 # ...写代码...
 jjplan task set 01HY... --status done
 
-# 5. 该 spec 下所有 task 已 done, 收尾 spec
+# 4. 该 spec 下所有 task 已 done, 收尾 spec
 jjplan spec set 01HX... --status done
 
 # PITFALLS

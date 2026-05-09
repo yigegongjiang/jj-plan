@@ -9,7 +9,7 @@ type Bindings = {
   JJPLAN_TOKEN: string;
 };
 
-const SPEC_STATUSES = ['draft', 'active', 'done'] as const;
+const SPEC_STATUSES = ['active', 'done'] as const;
 const TASK_STATUSES = ['todo', 'doing', 'done', 'blocked'] as const;
 const PATCH_FIELDS = ['title', 'body', 'status'] as const;
 
@@ -328,7 +328,7 @@ app.post('/projects/:name/specs', async (c) => {
         .prepare(
           'INSERT INTO specs (id, project_id, title, body, status, prev_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
         )
-        .bind(id, name, parsed.value.title, parsed.value.body, 'draft', prevId, t, t),
+        .bind(id, name, parsed.value.title, parsed.value.body, 'active', prevId, t, t),
     ]);
   } catch (e) {
     if (isUniqueViolation(e)) {

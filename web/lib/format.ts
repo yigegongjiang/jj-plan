@@ -1,7 +1,8 @@
 export function fmtTime(ms: number): string {
   if (typeof ms !== 'number' || !Number.isFinite(ms)) return String(ms);
   const d = new Date(ms);
-  return d.toISOString().replace('T', ' ').replace(/\.\d{3}Z$/, 'Z');
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 }
 
 export function fmtRelative(ms: number, now: number = Date.now()): string {

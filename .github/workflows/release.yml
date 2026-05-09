@@ -35,6 +35,17 @@ jobs:
         working-directory: worker
         run: bun install --frozen-lockfile || bun install
 
+      # Apply D1 migrations BEFORE deploying the worker so the live runtime
+      # never sees a stale schema/data state. wrangler d1 migrations apply is
+      # idempotent — already-applied entries in d1_migrations are skipped.
+      - name: Apply D1 migrations (remote)
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: worker
+          command: d1 migrations apply jjplan --remote
+
       - name: Deploy to Cloudflare
         uses: cloudflare/wrangler-action@v3
         with:

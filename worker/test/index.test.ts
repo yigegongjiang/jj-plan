@@ -366,9 +366,9 @@ describe('POST /projects/:name/specs validation', () => {
     expect(projects.map((p) => p.name)).toContain(name);
   });
 
-  it('default status is draft', async () => {
+  it('default status is active', async () => {
     const s = await newSpec({ title: 't' });
-    expect(s.status).toBe('draft');
+    expect(s.status).toBe('active');
   });
 
   it('returns full row shape with ULID id, project_id, equal timestamps', async () => {
@@ -376,7 +376,7 @@ describe('POST /projects/:name/specs validation', () => {
     expect(s).toMatchObject({
       title: 't',
       body: 'b',
-      status: 'draft',
+      status: 'active',
       prev_id: null,
       project_id: PROJECT,
     });
@@ -655,7 +655,7 @@ describe('PATCH /specs/:id', () => {
     const got = await r.json();
     expect(got.title).toBe('A2');
     expect(got.body).toBe('');
-    expect(got.status).toBe('draft');
+    expect(got.status).toBe('active');
     expect(got.project_id).toBe(PROJECT);
   });
 
@@ -666,7 +666,7 @@ describe('PATCH /specs/:id', () => {
     expect((await r.json()).body).toBe('b2');
   });
 
-  for (const status of ['draft', 'active', 'done']) {
+  for (const status of ['active', 'done']) {
     it(`accepts status=${status}`, async () => {
       const a = await newSpec({ title: 'A' });
       const r = await jsonReq(`/specs/${a.id}`, 'PATCH', { status });
@@ -675,8 +675,8 @@ describe('PATCH /specs/:id', () => {
     });
   }
 
-  for (const status of ['todo', 'doing', 'blocked', 'unknown', '']) {
-    it(`rejects task-only or invalid status=${JSON.stringify(status)}`, async () => {
+  for (const status of ['draft', 'todo', 'doing', 'blocked', 'unknown', '']) {
+    it(`rejects task-only, removed, or invalid status=${JSON.stringify(status)}`, async () => {
       const a = await newSpec({ title: 'A' });
       const r = await jsonReq(`/specs/${a.id}`, 'PATCH', { status });
       expect(r.status).toBe(400);
@@ -1136,7 +1136,7 @@ describe('PATCH /tasks/:id', () => {
   }
 
   for (const status of ['draft', 'active', 'unknown', '']) {
-    it(`rejects spec-only or invalid status=${JSON.stringify(status)}`, async () => {
+    it(`rejects spec-only, removed, or invalid status=${JSON.stringify(status)}`, async () => {
       const a = await newSpec({ title: 'A' });
       const t = await newTask(a.id, { title: 't' });
       const r = await jsonReq(`/tasks/${t.id}`, 'PATCH', { status });
@@ -1421,7 +1421,7 @@ describe('schema constraints (direct DB)', () => {
         .prepare(
           'INSERT INTO specs (id, project_id, title, body, status, prev_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
         )
-        .bind('TESTDIRECTSPEC0000000000000', PROJECT, 'X', '', 'draft', a.id, Date.now(), Date.now())
+        .bind('TESTDIRECTSPEC0000000000000', PROJECT, 'X', '', 'active', a.id, Date.now(), Date.now())
         .run(),
     ).rejects.toThrow(/UNIQUE/i);
   });

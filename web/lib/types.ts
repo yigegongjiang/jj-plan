@@ -1,4 +1,4 @@
-export const SPEC_STATUSES = ['draft', 'active', 'done'] as const;
+export const SPEC_STATUSES = ['active', 'done'] as const;
 export const TASK_STATUSES = ['todo', 'doing', 'done', 'blocked'] as const;
 
 export type SpecStatus = (typeof SPEC_STATUSES)[number];

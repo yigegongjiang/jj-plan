@@ -2,6 +2,18 @@
 
 本文件记录 jjplan 的版本变更, 格式参考 [Keep a Changelog](https://keepachangelog.com).
 
+## [0.4.0] - 2026-05-09
+
+### Changed (BREAKING)
+
+- spec status 由 `draft | active | done` 简化为 `active | done`. 新建 spec 默认值由 `draft` 改为 `active`. 推荐流变为 `active -> done`. `draft` 与 `active` 在原模型中无任何代码层差异, 仅是文档建议, 删之.
+- 旧客户端 `PATCH /specs/:id` 传 `status="draft"` 将返回 400. 升级 CLI / Web 即可.
+- migration `0002_drop_draft.sql` 把存量 `draft` 行就地改为 `active`, 不丢数据.
+
+### Notes
+
+- task 状态保持 `todo | doing | done | blocked` 不变. blocked 与其他三态正交, 信息独立, 保留.
+
 ## [0.3.0] - 2026-05-09
 
 ### Added
