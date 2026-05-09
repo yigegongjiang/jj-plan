@@ -1,0 +1,19 @@
+name = "jjplan"
+main = "src/index.ts"
+compatibility_date = "2026-05-01"
+
+# Static dashboard SPA, built by `web/` (Next.js, output: 'export') into
+# `web/out`. Cloudflare Workers Static Assets serves files from this directory
+# directly — when no asset matches (e.g. `/projects`, `/specs/:id`), the
+# request falls through to the worker fetch handler defined in `src/index.ts`.
+[assets]
+directory = "../web/out"
+
+# database_id is filled in during one-time bootstrap:
+#   wrangler d1 create jjplan
+# Copy the returned id below, commit, then run:
+#   wrangler d1 execute jjplan --file migrations/0001_init.sql --remote
+[[d1_databases]]
+binding = "DB"
+database_name = "jjplan"
+database_id = "22eed5f7-a156-407d-86d3-3312d8f50f28"

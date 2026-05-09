@@ -1,0 +1,80 @@
+name: release
+
+# Triggered by pushing a version tag (e.g. v0.1.0). Two independent jobs run
+# in parallel: deploy the Worker to Cloudflare, and compile the CLI binary
+# and attach it to the GitHub Release for that tag.
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+jobs:
+  deploy-worker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+
+      # Build the dashboard SPA first so wrangler can pick it up via
+      # `[assets].directory = "../web/out"` (see worker/wrangler.toml).
+      - name: Install web deps
+        working-directory: web
+        run: bun install --frozen-lockfile || bun install
+
+      - name: Typecheck web
+        working-directory: web
+        run: bun run typecheck
+
+      - name: Build web (static export to web/out)
+        working-directory: web
+        run: bun run build
+
+      - name: Install worker deps
+        working-directory: worker
+        run: bun install --frozen-lockfile || bun install
+
+      - name: Deploy to Cloudflare
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: worker
+          command: deploy
+
+  build-cli:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write  # required by softprops/action-gh-release
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Install cli deps
+        working-directory: cli
+        run: bun install --frozen-lockfile || bun install
+
+      - name: Verify VERSION matches tag
+        run: |
+          version="$(tr -d '[:space:]' < VERSION)"
+          tag="${GITHUB_REF_NAME#v}"
+          if [ "$version" != "$tag" ]; then
+            echo "VERSION ($version) != release tag (${GITHUB_REF_NAME})" >&2
+            exit 1
+          fi
+
+      - name: Typecheck CLI
+        working-directory: cli
+        run: bun run typecheck
+
+      - name: Compile macOS arm64 binary
+        working-directory: cli
+        run: bun run build
+
+      - name: Attach binary to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: cli/dist/jjplan-macos-arm64
+          fail_on_unmatched_files: true
