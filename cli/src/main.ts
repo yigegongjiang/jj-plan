@@ -387,166 +387,74 @@ function printHelp(): void {
     `jjplan ${VERSION}
 
 # PURPOSE
-Spec/Task 计划跟踪 CLI, 专为 AI 调用设计. 数据存远端 Cloudflare D1, 本地是无状态客户端.
-工作循环: 接需求 -> 写 SPEC (默认 active) -> 拆 TASK -> 推 status (todo->doing->done) -> SPEC 切 done.
+为 AI 设计的 Spec/Task 跟踪 CLI. 循环: 写 SPEC -> 拆 TASK -> 推 task status -> spec done.
 
-# DATA MODEL
-project (name, 主键)
-  -- spec (id=ULID, 同项目内可形成 0..N 条独立链)
-       -- task (id=ULID, 每个 spec 一条严格链)
+# MODEL
+project (name, 主键) -- spec (id=ULID) -- task (id=ULID)
+- project 自动 upsert: spec new 首次提及即创建; 无 \`project new\`.
+- spec/task 用 --after 串成单链, 禁止 fork (一个 prev 至多一个后继, 二次引用 -> 409).
+- 中间删/插自动接续: A->B->C 删 B => A->C; --after A 插 X => A->X->B->C.
+- 级联删除 (不可逆): project rm 删其下全部 spec+task; spec rm 删其下全部 task.
 
-- project 自动 upsert: spec new 首次提及该 project 名即创建; 无 \`project new\`.
-- spec 链: --after 连接 (A->B->C); 不允许 fork (同一 prev_id 至多一个后继).
-- task 链: --after 连接, 不传则追加链尾; 中间插入会把原后继自动接到新 task (A->B->C, --after A 新建 X => A->X->B->C). 不允许 fork.
-- 删中间节点自动接续: A->B->C 删 B 后变 A->C.
+# I/O
+- 输出: stdout 单行 JSON; DELETE 返回空 (HTTP 204).
+- 错误: stderr 单行 \`jjplan: <msg>\` + 非零 exit; 客户端不重试.
+- new 命令的 body 从 stdin 读 (无 stdin = 空 body); set 改 body 用 --body flag, 整体覆盖.
+- id 一律 ULID, 必须从响应 JSON 取, 不可构造或截断.
+- 限长 (chars): title 1..${MAX_TITLE_LEN}, body 0..${MAX_BODY_LEN}, project 1..${MAX_PROJECT_NAME_LEN}.
 
-# I/O CONTRACT
-- 输入: 位置参数 + flag; body 字段在 \`new\` 命令中从 stdin 读 (TTY 检测, 无 stdin = 空 body).
-- 输出: 单行 JSON 到 stdout; DELETE 类返回空 (HTTP 204).
-- 错误: 单行 stderr \`jjplan: <msg>\` + 非零 exit code; 客户端不重试.
-- id 一律 ULID; 必须从响应 JSON 抓取, 不可凭空构造.
-- 限长: title 1..${MAX_TITLE_LEN}, body 0..${MAX_BODY_LEN}, project 1..${MAX_PROJECT_NAME_LEN} (chars).
+# COMMANDS
 
-# META
-jjplan help | --help          打印本帮助
-jjplan --version              打印版本
-jjplan self-update            重装最新版本; 仅在用户明确要求时执行
-jjplan uninstall              卸载; 仅在用户明确要求时执行
+jjplan --help | --version
+jjplan self-update | uninstall          仅在用户明确要求时执行
 
-# PROJECT
 jjplan project ls
-  列所有 project, 嵌套展开 specs (链序) 与 tasks (链序), 一次拉完.
   -> [{name, created_at, updated_at, specs:[{...spec, tasks:[...task]}]}]
-
 jjplan project rm <name>
-  删 project; cascade 删该项目下全部 specs 与 tasks. 不可逆.
-  -> 空 | 404 项目不存在.
+  err: 404
 
-# SPEC
 jjplan spec new <project> <title> [--after <prev_spec_id>]
-  在 project 下新建 spec; status 固定为 \`active\`; body 从 stdin 读.
-  推荐 body 结构: ## 背景 / ## 目标 / ## 方案 / ## 兼容性.
-  --after: 接在 prev_spec_id 之后; prev 必须同项目且尚无后继.
   -> {id, project_id, title, body, status:"active", prev_id, created_at, updated_at}
-  错误: 400 prev 跨项目/不存在 | 409 prev 已有后继.
-
+  err: 400 prev 跨项目/不存在 | 409 prev 已有后继
 jjplan spec ls <project>
-  列项目内所有 spec (链序, 多条独立链按各自 head 的 created_at 倒序),
-  每个 spec 内嵌 tasks (链序).
-  -> [{...spec, tasks:[...task]}] | 404 项目不存在.
-
+  -> [{...spec, tasks:[...task]}]   (链序)
+  err: 404
 jjplan spec show <id>
-  读单个 spec, 内嵌 tasks (链序).
-  -> {...spec, tasks:[...task]} | 404.
-
+  -> {...spec, tasks:[...task]}
+  err: 404
 jjplan spec set <id> [--title T] [--body B] [--status ${SPEC_STATUSES.join('|')}]
-  改 spec; 至少传一个 flag. --body 是完整覆盖 (非追加), 多行 markdown 用
-  --body "$(cat file.md)".
-  -> {...spec} | 400 无字段/status 非法 | 404.
-
+  至少传一个 flag.
+  -> {...spec}
+  err: 400 无 flag/status 非法 | 404
 jjplan spec rm <id>
-  删 spec; cascade 删该 spec 所有 task; 链中前后自动接续. 不可逆.
-  -> 空 | 404 | 409 并发冲突 (重读后再试).
+  err: 404 | 409 并发
 
-# TASK
 jjplan task new <spec_id> <title> [--after <prev_task_id>]
-  在 spec 下新建 task; status 固定为 \`todo\`; body 从 stdin 读.
-  默认追加到该 spec 的 task 链尾.
-  --after: 接在 prev_task_id 之后; 若 prev 有后继, 原后继的 prev_id 自动改为新 task (A->B->C, --after A => A->X->B->C). prev 必须同 spec.
-  推荐 body 结构: 操作步骤 (1./2./3.) + 验收条件 + 涉及文件路径.
+  不传 --after 追加链尾.
   -> {id, spec_id, title, body, status:"todo", prev_id, created_at, updated_at}
-  错误: 400 prev 跨 spec/不存在 | 404 spec 不存在 (仅在不传 --after 时触发) | 409 并发竞争 (重试).
-
+  err: 400 prev 跨 spec/不存在 | 404 spec 不存在 (仅无 --after 时) | 409 并发
 jjplan task ls <spec_id>
-  列该 spec 的 task (链序). 等价于 \`spec show <spec_id>\` 取 .tasks 字段.
-  -> [...task] | 404 spec 不存在.
-
+  -> [...task]   (链序)
+  err: 404
 jjplan task set <id> [--title T] [--body B] [--status ${TASK_STATUSES.join('|')}]
-  改 task; 至少传一个 flag. --body 是完整覆盖 (非追加).
-  -> {...task} | 400 | 404.
-
+  至少传一个 flag.
+  -> {...task}
+  err: 400 | 404
 jjplan task rm <id>
-  删 task; 链中前后自动接续. 不可逆.
-  -> 空 | 404 | 409.
+  err: 404 | 409 并发
 
-# STATUS 语义与流转
-spec
-  active  默认状态; 含 "刚立项, 仍在写 body" 与 "已开始执行" 两种情形, 不再区分.
-          可反复 spec set 修订 title/body. 拆 task / 推进均无需切换状态.
-  done    语义完成态; 所有 task 已 done 后再切.
-  推荐流: active -> done.
+# STATUS
+spec  active (默认, 含立项与执行中) | done (所有 task done 后切)
+task  todo (默认) -> doing -> done; 任意非 done 可 -> blocked
+blocked: 切入时原因写 body, 解除后回 todo/doing.
+系统不强制状态机, 任意状态可互切, 由 AI 自律.
 
-task
-  todo    待办. 默认状态.
-  doing   正在执行. 推荐一次仅一条 task 处于 doing.
-  done    语义完成态.
-  blocked 受阻 (依赖未满足/外部资源/需用户决策). 切到 blocked 时把原因写入 body;
-          解除后切回 todo 或 doing.
-  推荐流: todo -> doing -> done; 任何非 done 状态可临时 -> blocked.
-
-注: 系统不做状态机硬校验, 任何状态间均可切换; 由 AI 主动遵循上述规则.
-
-# EXECUTION 执行规则
-何时依序: 遇链式结构沿 prev_id 从头推进, 不跳序.
-- task 是严格单链, 必须按链序 todo -> doing -> done.
-- spec 经 --after 串成链 (A -> B -> C) 时, 必须先完成 A 才开始 B.
-- 单节点 spec (无 --after, 无后继) 不构成链, 独立执行即可.
-
-何时按用户指定: 链中部分节点已 done 但仍有节点未 done 时, 用户可显式点名某个 id 跳过链序直接推进.
-- 适用: 中段 task 仍 todo/blocked, 用户指定先做后段某条; 或先解 blocked 项的外部依赖.
-- AI 不得自作主张跳序; 唯一脱链途径是用户明确指定目标 id.
-
-判定流程:
-1. 用户未指定 id -> 沿当前 spec 的 task 链找首个非 done 项推进.
-2. 用户指定 id -> 按该 id 推进, 即使前序未全 done.
-3. spec 整体切 done 必须在其所有 task 都已 done 之后.
-
-# TYPICAL FLOW
-# 1. 接需求, 写 SPEC (body 从 stdin); 创建即 active, 无需手动切状态
-cat <<'MD' | jjplan spec new myrepo "添加 GitHub OAuth 登录"
-## 背景
-现有仅密码登录.
-## 目标
-支持 GitHub OAuth, 不破坏既有 session.
-## 方案
-1. 加 oauth_tokens 表
-2. /auth/github 路由
-3. 前端登录页加按钮
-## 兼容性
-旧 token 继续有效.
-MD
-# -> {"id":"01HX...","status":"active",...}
-
-# 2. 拆 task (body 从 stdin)
-cat <<'MD' | jjplan task new 01HX... "schema: oauth_tokens 表"
-1. 写 worker/migrations/0002_oauth.sql
-2. wrangler d1 migrations apply
-验收: 新表存在, 测试通过.
-MD
-# -> {"id":"01HY...","status":"todo",...}
-
-# 3. 推进 task
-jjplan task set 01HY... --status doing
-# ...写代码...
-jjplan task set 01HY... --status done
-
-# 4. 该 spec 下所有 task 已 done, 收尾 spec
-jjplan spec set 01HX... --status done
-
-# PITFALLS
-- 命令是 \`jjplan <noun> <verb> ...\` (空格分隔), 不要写成 \`jjplan spec.new\`.
-- body 在 \`spec new\` / \`task new\` 中只能从 stdin 读; \`spec set\` / \`task set\`
-  改 body 用 --body flag (非 stdin).
-- project 没有 \`new\` 子命令; 必须靠 \`spec new\` 首次写入触发 upsert.
-- 删除 project 下所有 spec 不会自动删除 project; 只有 \`project rm\` 会删除 project.
-- id 一律 ULID, 必须从前一条响应 JSON 取; 不可凭空构造或截断.
-- spec 不允许 fork: 同一 prev_spec_id 只能被一条 spec 引用; 二次引用返回 409.
-- 删除 (project rm / spec rm / task rm) 都是不可逆的, 仅在用户明确要求时执行.
-- 客户端不重试 409; 拿到后应重新查询当前状态再决策.
-
-# CONFIG
-${CONFIG_PATH}
-  {"endpoint":"https://jjplan.<acct>.workers.dev","token":"<password>"}
+# BEHAVIOR
+- 默认沿 task 链找首个非 done 推进, 不跳序.
+- spec 链必须按链序完成: A->B->C, A done 才进 B.
+- 用户显式指定 id => 跳序推进; AI 不得自行跳序.
+- spec done 必须在其所有 task done 之后.
+- 拿到 409 不重试, 重新查询当前状态再决策.
 `,
   );
 }
