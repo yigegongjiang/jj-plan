@@ -1537,3 +1537,107 @@ describe('orderTaskChain orphan handling', () => {
     expect(got.tasks[0]?.id).toBe(t.id);
   });
 });
+
+// =============================================================================
+// updated_at cascade + recency-based list ordering
+//
+// Pins down two coupled invariants:
+//   1. Any child mutation bumps every ancestor's updated_at to the same ts.
+//   2. List endpoints rank by updated_at, so "most recently active" floats up.
+//
+// Cross-cutting case at the bottom: chain integrity (prev_id links) beats
+// recency. A successor with a later updated_at must NOT be promoted to head.
+// =============================================================================
+
+describe('updated_at cascade and ordering', () => {
+  it('spec creation bumps parent project.updated_at to spec.created_at', async () => {
+    const s = await newSpec({ title: 'A' }, 'P1');
+    const p1 = (await listProjects()).find((p) => p.name === 'P1')!;
+    expect(p1.updated_at).toBe(s.created_at);
+  });
+
+  it('task creation bumps spec.updated_at AND project.updated_at to task.created_at', async () => {
+    const s = await newSpec({ title: 'A' }, 'P1');
+    await tick();
+    const t = await newTask(s.id, { title: 't' });
+    const p1 = (await listProjects()).find((p) => p.name === 'P1')!;
+    const sAfter = p1.specs.find((sp) => sp.id === s.id)!;
+    expect(sAfter.updated_at).toBe(t.created_at);
+    expect(p1.updated_at).toBe(t.created_at);
+  });
+
+  it('task PATCH cascades to spec and project with shared ts', async () => {
+    const s = await newSpec({ title: 'A' }, 'P1');
+    const t = await newTask(s.id, { title: 't' });
+    await tick();
+    const r = await jsonReq(`/tasks/${t.id}`, 'PATCH', { status: 'doing' });
+    expect(r.status).toBe(200);
+    const tAfter: Task = await r.json();
+    const p1 = (await listProjects()).find((p) => p.name === 'P1')!;
+    const sAfter = p1.specs.find((sp) => sp.id === s.id)!;
+    expect(sAfter.updated_at).toBe(tAfter.updated_at);
+    expect(p1.updated_at).toBe(tAfter.updated_at);
+    expect(p1.updated_at).toBeGreaterThan(t.created_at);
+  });
+
+  it('task DELETE cascades to spec and project', async () => {
+    const s = await newSpec({ title: 'A' }, 'P1');
+    const t1 = await newTask(s.id, { title: 't1' });
+    const t2 = await newTask(s.id, { title: 't2' });
+    await tick();
+    const r = await authed(`/tasks/${t2.id}`, { method: 'DELETE' });
+    expect(r.status).toBe(204);
+    const p1 = (await listProjects()).find((p) => p.name === 'P1')!;
+    const sAfter = p1.specs.find((sp) => sp.id === s.id)!;
+    expect(sAfter.updated_at).toBeGreaterThan(t2.created_at);
+    expect(p1.updated_at).toBe(sAfter.updated_at);
+    void t1;
+  });
+
+  it('spec DELETE cascades to project.updated_at', async () => {
+    const s1 = await newSpec({ title: 'A' }, 'P1');
+    const s2 = await newSpec({ title: 'B' }, 'P1');
+    await tick();
+    const r = await authed(`/specs/${s2.id}`, { method: 'DELETE' });
+    expect(r.status).toBe(204);
+    const p1 = (await listProjects()).find((p) => p.name === 'P1')!;
+    expect(p1.updated_at).toBeGreaterThan(s2.created_at);
+    void s1;
+  });
+
+  it('GET /projects ranks by latest descendant activity (task push moves stale project to top)', async () => {
+    const sOld = await newSpec({ title: 'A' }, 'older');
+    await tick();
+    await newSpec({ title: 'A' }, 'newer');
+    expect((await listProjects()).map((p) => p.name)).toEqual(['newer', 'older']);
+
+    // Task push under "older" should jump it to the front.
+    await tick();
+    await newTask(sOld.id, { title: 't' });
+    expect((await listProjects()).map((p) => p.name)).toEqual(['older', 'newer']);
+  });
+
+  it('multi-chain order tracks head.updated_at; successor recency does NOT change head identity', async () => {
+    const a1 = await newSpec({ title: 'A1' });
+    await tick();
+    const a2 = await newSpec({ title: 'A2', prev_id: a1.id });
+    await tick();
+    const b1 = await newSpec({ title: 'B1' });
+
+    // b1 is the most recently active head → its (single-node) chain comes first.
+    expect((await listSpecs()).map((s) => s.title)).toEqual(['B1', 'A1', 'A2']);
+
+    // PATCH a2 (successor, NOT a head). a2.updated_at becomes the largest of
+    // all three, but a2 must NOT be promoted to a head — chain order is
+    // decided by prev_id, not by updated_at.
+    await tick();
+    await jsonReq(`/specs/${a2.id}`, 'PATCH', { status: 'done' });
+    expect((await listSpecs()).map((s) => s.title)).toEqual(['B1', 'A1', 'A2']);
+
+    // PATCH the actual head a1. Now a1's chain leapfrogs b1.
+    await tick();
+    await jsonReq(`/specs/${a1.id}`, 'PATCH', { title: 'A1*' });
+    expect((await listSpecs()).map((s) => s.title)).toEqual(['A1*', 'A2', 'B1']);
+    void b1;
+  });
+});

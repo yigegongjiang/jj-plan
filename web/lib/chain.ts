@@ -2,13 +2,14 @@
 //
 // Each chain is laid out head → ... → tail. An item is treated as a head
 // when its `prev_id` is null OR points outside the input list (defensive
-// fallback against orphaned references). Heads are ordered by `created_at`
-// so the rendered layout is deterministic.
+// fallback against orphaned references). Input order is preserved: the
+// server returns specs already sorted by head's `updated_at DESC` with
+// successors trailing their head, so we just collect heads as we encounter
+// them and walk each chain forward.
 
 export interface ChainItem {
   id: string;
   prev_id: string | null;
-  created_at: number;
 }
 
 export function buildChains<T extends ChainItem>(items: T[]): T[][] {
@@ -24,8 +25,6 @@ export function buildChains<T extends ChainItem>(items: T[]): T[][] {
       heads.push(it);
     }
   }
-
-  heads.sort((a, b) => a.created_at - b.created_at);
 
   const chains: T[][] = [];
   const visited = new Set<string>();

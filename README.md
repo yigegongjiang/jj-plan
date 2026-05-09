@@ -5,7 +5,7 @@
 ## 安装
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/yangfan-elestyle/jj-plan/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/yigegongjiang/jj-plan/main/install.sh | bash
 ```
 
 写 `~/.jjplan/config.json`:

@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 #
 # jjplan installer / updater.
-# Usage: curl -fsSL https://raw.githubusercontent.com/yangfan-elestyle/jj-plan/main/install.sh | bash
-#        curl -fsSL https://raw.githubusercontent.com/yangfan-elestyle/jj-plan/main/install.sh | bash -s -- --uninstall
+# Usage: curl -fsSL https://raw.githubusercontent.com/yigegongjiang/jj-plan/main/install.sh | bash
+#        curl -fsSL https://raw.githubusercontent.com/yigegongjiang/jj-plan/main/install.sh | bash -s -- --uninstall
 #
 # Downloads the latest jjplan CLI binary from GitHub Releases and drops it
 # into ~/.local/bin/jjplan. Idempotent: re-running upgrades to the latest
@@ -10,7 +10,7 @@
 
 set -euo pipefail
 
-REPO="yangfan-elestyle/jj-plan"
+REPO="yigegongjiang/jj-plan"
 ASSET="jjplan-macos-arm64"
 DEST="${HOME}/.local/bin/jjplan"
 

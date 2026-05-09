@@ -104,7 +104,11 @@ function parseNewPayload(raw: { title?: unknown; body?: unknown }):
 
 const now = (): number => Date.now();
 
-function buildPatch(body: PatchBody, allowedStatuses: readonly string[]): PatchResult {
+function buildPatch(
+  body: PatchBody,
+  allowedStatuses: readonly string[],
+  ts: number,
+): PatchResult {
   const fragments: string[] = [];
   const values: unknown[] = [];
   for (const field of PATCH_FIELDS) {
@@ -125,7 +129,7 @@ function buildPatch(body: PatchBody, allowedStatuses: readonly string[]): PatchR
   }
   if (fragments.length === 0) return { ok: false, error: 'no fields to update' };
   fragments.push('updated_at = ?');
-  values.push(now());
+  values.push(ts);
   return { ok: true, setClause: fragments.join(', '), values };
 }
 
@@ -161,8 +165,11 @@ function orderTaskChain(rows: TaskRow[]): TaskRow[] {
 // Specs may live as standalone heads or as members of a chain WITHIN a single
 // project. Output:
 //   - one chain at a time, head first, then sequential successors
-//   - chains ordered by their head's created_at DESC (newest chain first)
-//   - any orphans (data inconsistency) appended last, by created_at DESC
+//   - chains ordered by their head's updated_at DESC (most-recently-active
+//     chain first; child task mutations cascade into the head's updated_at)
+//   - within a chain, successors keep prev_id order regardless of their own
+//     updated_at — chain integrity beats recency for non-head nodes
+//   - any orphans (data inconsistency) appended last, by updated_at DESC
 function orderSpecs(rows: SpecRow[]): SpecRow[] {
   if (rows.length === 0) return [];
   const ids = new Set(rows.map((r) => r.id));
@@ -175,7 +182,7 @@ function orderSpecs(rows: SpecRow[]): SpecRow[] {
       successor.set(r.prev_id, r);
     }
   }
-  heads.sort((a, b) => b.created_at - a.created_at);
+  heads.sort((a, b) => b.updated_at - a.updated_at);
 
   const ordered: SpecRow[] = [];
   const seen = new Set<string>();
@@ -190,7 +197,7 @@ function orderSpecs(rows: SpecRow[]): SpecRow[] {
   if (ordered.length < rows.length) {
     const orphans = rows
       .filter((r) => !seen.has(r.id))
-      .sort((a, b) => b.created_at - a.created_at);
+      .sort((a, b) => b.updated_at - a.updated_at);
     ordered.push(...orphans);
   }
   return ordered;
@@ -206,6 +213,18 @@ async function readTask(db: D1Database, id: string) {
 
 async function readProject(db: D1Database, name: string) {
   return db.prepare('SELECT * FROM projects WHERE name = ?').bind(name).first<ProjectRow>();
+}
+
+// Parent-bump statement factories. They only build the prepared statement;
+// callers decide whether to .run() standalone or fold it into a batch alongside
+// the self-write. Pair them with a single `ts` per request so the parent's
+// updated_at lines up with the child's created_at / updated_at.
+function bumpProject(db: D1Database, name: string, ts: number) {
+  return db.prepare('UPDATE projects SET updated_at = ? WHERE name = ?').bind(ts, name);
+}
+
+function bumpSpec(db: D1Database, id: string, ts: number) {
+  return db.prepare('UPDATE specs SET updated_at = ? WHERE id = ?').bind(ts, id);
 }
 
 function isUniqueViolation(err: unknown): boolean {
@@ -243,7 +262,7 @@ function bundleSpecs(
 app.get('/projects', async (c) => {
   const [{ results: projectRows }, { results: specRows }, { results: taskRows }] =
     await Promise.all([
-      c.env.DB.prepare('SELECT * FROM projects').all<ProjectRow>(),
+      c.env.DB.prepare('SELECT * FROM projects ORDER BY updated_at DESC').all<ProjectRow>(),
       c.env.DB.prepare('SELECT * FROM specs').all<SpecRow>(),
       c.env.DB.prepare('SELECT * FROM tasks').all<TaskRow>(),
     ]);
@@ -256,9 +275,8 @@ app.get('/projects', async (c) => {
   }
 
   const tasksBySpec = indexTasks(taskRows);
-  const sorted = projectRows.slice().sort((a, b) => b.created_at - a.created_at);
   return c.json(
-    sorted.map((p) => ({
+    projectRows.map((p) => ({
       ...p,
       specs: bundleSpecs(specsByProject.get(p.name) ?? [], tasksBySpec),
     })),
@@ -329,6 +347,10 @@ app.post('/projects/:name/specs', async (c) => {
           'INSERT INTO specs (id, project_id, title, body, status, prev_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
         )
         .bind(id, name, parsed.value.title, parsed.value.body, 'active', prevId, t, t),
+      // Bump regardless of whether the INSERT OR IGNORE above hit a fresh row
+      // or no-op'd on an existing project — we want updated_at to track the
+      // most recent activity inside the project, not just project creation.
+      bumpProject(c.env.DB, name, t),
     ]);
   } catch (e) {
     if (isUniqueViolation(e)) {
@@ -372,13 +394,22 @@ app.patch('/specs/:id', async (c) => {
   const id = c.req.param('id');
   const parsedBody = await parseJsonBody<PatchBody>(c);
   if (!parsedBody.ok) return parsedBody.response;
-  const patch = buildPatch(parsedBody.value, SPEC_STATUSES);
+
+  // Read first to grab project_id for the cascade bump and to surface 404
+  // before the write. The extra round-trip is intentional: it lets us keep
+  // the self-write and parent-bump in a single batch with a shared ts.
+  const existing = await readSpec(c.env.DB, id);
+  if (!existing) return c.json({ error: 'spec not found' }, 404);
+
+  const ts = now();
+  const patch = buildPatch(parsedBody.value, SPEC_STATUSES, ts);
   if (!patch.ok) return c.json({ error: patch.error }, 400);
-  const result = await c.env.DB
-    .prepare(`UPDATE specs SET ${patch.setClause} WHERE id = ?`)
-    .bind(...patch.values, id)
-    .run();
-  if (result.meta.changes === 0) return c.json({ error: 'spec not found' }, 404);
+  await c.env.DB.batch([
+    c.env.DB
+      .prepare(`UPDATE specs SET ${patch.setClause} WHERE id = ?`)
+      .bind(...patch.values, id),
+    bumpProject(c.env.DB, existing.project_id, ts),
+  ]);
   return c.json(await readSpec(c.env.DB, id));
 });
 
@@ -430,6 +461,16 @@ app.delete('/specs/:id', async (c) => {
         .bind(spec.prev_id, t, succ.id, id),
     );
   }
+  // Cascade bump, gated by the same condition as the DELETE: only if the
+  // spec is actually gone. Mirrors the successor-rewire's NOT EXISTS guard so
+  // a CAS-failed DELETE leaves project.updated_at untouched.
+  ops.push(
+    c.env.DB
+      .prepare(
+        'UPDATE projects SET updated_at = ? WHERE name = ? AND NOT EXISTS (SELECT 1 FROM specs WHERE id = ?)',
+      )
+      .bind(t, spec.project_id, id),
+  );
 
   let results;
   try {
@@ -478,10 +519,14 @@ app.post('/specs/:id/tasks', async (c) => {
       return c.json({ error: 'prev_id must be string or null' }, 400);
     }
     const prevId = parsedBody.value.prev_id;
+    // Pull project_id alongside spec_id in one round-trip; we need it for
+    // the project-level cascade bump below.
     const prev = await c.env.DB
-      .prepare('SELECT spec_id FROM tasks WHERE id = ?')
+      .prepare(
+        'SELECT t.spec_id, s.project_id FROM tasks t JOIN specs s ON t.spec_id = s.id WHERE t.id = ?',
+      )
       .bind(prevId)
-      .first<{ spec_id: string }>();
+      .first<{ spec_id: string; project_id: string }>();
     if (!prev) return c.json({ error: 'prev_id task not found' }, 400);
     if (prev.spec_id !== specId) {
       return c.json({ error: 'prev_id must belong to the same spec' }, 400);
@@ -501,6 +546,8 @@ app.post('/specs/:id/tasks', async (c) => {
             'INSERT INTO tasks (id, spec_id, title, body, status, prev_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
           )
           .bind(id, specId, parsed.value.title, parsed.value.body, 'todo', prevId, t, t),
+        bumpSpec(c.env.DB, specId, t),
+        bumpProject(c.env.DB, prev.project_id, t),
       ]);
     } catch (e) {
       // A concurrent insert/delete may have changed the chain between our
@@ -515,34 +562,45 @@ app.post('/specs/:id/tasks', async (c) => {
     return c.json(await readTask(c.env.DB, id), 201);
   }
 
-  // Default branch: auto-append to the tail. Single statement to avoid the
-  // round-trip of a separate tail lookup.
+  // Default branch: auto-append to the tail. We need project_id for the
+  // cascade bump, so we read the spec up-front (which also turns the previous
+  // WHERE-EXISTS-based 404 into an explicit 404). A concurrent spec delete
+  // between this read and the batch trips the FK on tasks.spec_id, which
+  // rolls back the entire batch.
+  const spec = await readSpec(c.env.DB, specId);
+  if (!spec) return c.json({ error: 'spec not found' }, 404);
+
   const id = ulid();
   const t = now();
-  let result;
   try {
-    result = await c.env.DB
-      .prepare(
-        `INSERT INTO tasks (id, spec_id, title, body, status, prev_id, created_at, updated_at)
-         SELECT ?1, ?2, ?3, ?4, 'todo',
-           (SELECT t.id FROM tasks t
-              WHERE t.spec_id = ?2
-                AND NOT EXISTS (SELECT 1 FROM tasks t2 WHERE t2.spec_id = ?2 AND t2.prev_id = t.id)
-              LIMIT 1),
-           ?5, ?5
-         WHERE EXISTS (SELECT 1 FROM specs WHERE id = ?2)`,
-      )
-      .bind(id, specId, parsed.value.title, parsed.value.body, t)
-      .run();
+    await c.env.DB.batch([
+      c.env.DB
+        .prepare(
+          `INSERT INTO tasks (id, spec_id, title, body, status, prev_id, created_at, updated_at)
+           VALUES (?1, ?2, ?3, ?4, 'todo',
+             (SELECT t.id FROM tasks t
+                WHERE t.spec_id = ?2
+                  AND NOT EXISTS (SELECT 1 FROM tasks t2 WHERE t2.spec_id = ?2 AND t2.prev_id = t.id)
+                LIMIT 1),
+             ?5, ?5)`,
+        )
+        .bind(id, specId, parsed.value.title, parsed.value.body, t),
+      bumpSpec(c.env.DB, specId, t),
+      bumpProject(c.env.DB, spec.project_id, t),
+    ]);
   } catch (e) {
     // Concurrent inserts may race on the tail-lookup; partial unique index
     // catches the second writer. Surface as 409 so the client can retry.
     if (isUniqueViolation(e)) {
       return c.json({ error: 'concurrent task insert, retry' }, 409);
     }
+    // Spec was deleted between our read and the batch — FK on tasks.spec_id
+    // rolls everything back, including both bumps.
+    if (isFkViolation(e)) {
+      return c.json({ error: 'spec not found' }, 404);
+    }
     throw e;
   }
-  if (result.meta.changes === 0) return c.json({ error: 'spec not found' }, 404);
   return c.json(await readTask(c.env.DB, id), 201);
 });
 
@@ -550,13 +608,28 @@ app.patch('/tasks/:id', async (c) => {
   const id = c.req.param('id');
   const parsedBody = await parseJsonBody<PatchBody>(c);
   if (!parsedBody.ok) return parsedBody.response;
-  const patch = buildPatch(parsedBody.value, TASK_STATUSES);
+
+  // Single JOIN read: spec_id + project_id for the two cascade bumps, plus
+  // 404 detection. Same trade-off as PATCH /specs/:id — one extra round-trip
+  // buys atomic batch with shared ts.
+  const ctx = await c.env.DB
+    .prepare(
+      'SELECT t.spec_id, s.project_id FROM tasks t JOIN specs s ON t.spec_id = s.id WHERE t.id = ?',
+    )
+    .bind(id)
+    .first<{ spec_id: string; project_id: string }>();
+  if (!ctx) return c.json({ error: 'task not found' }, 404);
+
+  const ts = now();
+  const patch = buildPatch(parsedBody.value, TASK_STATUSES, ts);
   if (!patch.ok) return c.json({ error: patch.error }, 400);
-  const result = await c.env.DB
-    .prepare(`UPDATE tasks SET ${patch.setClause} WHERE id = ?`)
-    .bind(...patch.values, id)
-    .run();
-  if (result.meta.changes === 0) return c.json({ error: 'task not found' }, 404);
+  await c.env.DB.batch([
+    c.env.DB
+      .prepare(`UPDATE tasks SET ${patch.setClause} WHERE id = ?`)
+      .bind(...patch.values, id),
+    bumpSpec(c.env.DB, ctx.spec_id, ts),
+    bumpProject(c.env.DB, ctx.project_id, ts),
+  ]);
   return c.json(await readTask(c.env.DB, id));
 });
 
@@ -577,6 +650,13 @@ app.delete('/tasks/:id', async (c) => {
   const task = await readTask(c.env.DB, id);
   if (!task) return c.json({ error: 'task not found' }, 404);
 
+  // Need project_id for the project-level cascade bump.
+  const projectRow = await c.env.DB
+    .prepare('SELECT project_id FROM specs WHERE id = ?')
+    .bind(task.spec_id)
+    .first<{ project_id: string }>();
+  if (!projectRow) return c.json({ error: 'task not found' }, 404);
+
   const t = now();
   let results;
   try {
@@ -589,6 +669,19 @@ app.delete('/tasks/:id', async (c) => {
           'UPDATE tasks SET prev_id = ?, updated_at = ? WHERE prev_id = ? AND spec_id = ? AND NOT EXISTS (SELECT 1 FROM tasks WHERE id = ?)',
         )
         .bind(task.prev_id, t, id, task.spec_id, id),
+      // Cascade bumps gated by the same NOT EXISTS condition as the
+      // successor rewire: a CAS-failed DELETE leaves both updated_at fields
+      // untouched.
+      c.env.DB
+        .prepare(
+          'UPDATE specs SET updated_at = ? WHERE id = ? AND NOT EXISTS (SELECT 1 FROM tasks WHERE id = ?)',
+        )
+        .bind(t, task.spec_id, id),
+      c.env.DB
+        .prepare(
+          'UPDATE projects SET updated_at = ? WHERE name = ? AND NOT EXISTS (SELECT 1 FROM tasks WHERE id = ?)',
+        )
+        .bind(t, projectRow.project_id, id),
     ]);
   } catch (e) {
     if (isUniqueViolation(e)) {

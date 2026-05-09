@@ -25,7 +25,7 @@ declare const JJPLAN_VERSION: string | undefined;
 
 const CONFIG_PATH = join(homedir(), '.jjplan', 'config.json');
 const INSTALL_URL =
-  'https://raw.githubusercontent.com/yangfan-elestyle/jj-plan/main/install.sh';
+  'https://raw.githubusercontent.com/yigegongjiang/jj-plan/main/install.sh';
 
 const SPEC_STATUSES = ['active', 'done'] as const;
 const TASK_STATUSES = ['todo', 'doing', 'done', 'blocked'] as const;
