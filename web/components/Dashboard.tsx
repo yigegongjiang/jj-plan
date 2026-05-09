@@ -106,10 +106,15 @@ export default function Dashboard() {
     setDel(null);
   }, []);
 
+  // silent=true: background auto-refresh path. Skip the loading/error UI so a
+  // 5s tick does not flash spinners or red banners on transient hiccups, but
+  // still react to 401 (stale token must kick the user back to login).
   const load = useCallback(
-    async (t: string) => {
-      setLoading(true);
-      setError(null);
+    async (t: string, silent = false) => {
+      if (!silent) {
+        setLoading(true);
+        setError(null);
+      }
       try {
         const data = await api.listProjects(t);
         setProjects(data);
@@ -119,11 +124,13 @@ export default function Dashboard() {
         if (err.status === 401) {
           setLoginError('密码错误');
           fallbackToLogin();
+        } else if (silent) {
+          console.warn('[auto-refresh]', err);
         } else {
           setError(err.message);
         }
       } finally {
-        setLoading(false);
+        if (!silent) setLoading(false);
       }
     },
     [fallbackToLogin],
@@ -131,6 +138,24 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (token) void load(token);
+  }, [token, load]);
+
+  // Auto-refresh every 5s while logged in so AI-side CLI changes show up
+  // without a manual reload. Skips ticks when the tab is hidden, then fires
+  // immediately on visibilitychange→visible so a returning user sees fresh
+  // data without waiting for the next interval.
+  useEffect(() => {
+    if (!token) return;
+    if (typeof document === 'undefined') return;
+    const tick = () => {
+      if (document.visibilityState === 'visible') void load(token, true);
+    };
+    const intervalId = window.setInterval(tick, 5000);
+    document.addEventListener('visibilitychange', tick);
+    return () => {
+      window.clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', tick);
+    };
   }, [token, load]);
 
   function login() {

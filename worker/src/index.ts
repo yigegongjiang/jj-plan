@@ -450,13 +450,73 @@ app.delete('/specs/:id', async (c) => {
 
 // ---------- tasks ----------
 
+// `prev_id` is optional:
+//   * omitted / null → auto-append to the spec's tail (single-statement INSERT).
+//   * provided → insert AFTER that task. If prev had a successor, the successor
+//     gets rewired so its prev_id points to the new task (A→B→C with prev=A
+//     yields A→X→B→C). Cross-spec or unknown prev_id surfaces as 400.
+//
+// uq_tasks_chain on (spec_id, COALESCE(prev_id, 'HEAD')) makes ordering
+// matter inside the batch:
+//   1. UPDATE successor.prev_id = new_id  — vacates (spec_id, prev_id) so the
+//      INSERT can reuse it. Safe because tasks.prev_id has no FK; the not-yet-
+//      inserted new_id is allowed to dangle for one statement.
+//   2. INSERT new task with prev_id = original prev_id.
+// Reversing the order would trip UNIQUE on the INSERT and the batch would roll
+// back. UPDATE→INSERT keeps the chain consistent at every statement boundary.
 app.post('/specs/:id/tasks', async (c) => {
   const specId = c.req.param('id');
-  const parsedBody = await parseJsonBody<{ title?: unknown; body?: unknown }>(c);
+  const parsedBody = await parseJsonBody<{ title?: unknown; body?: unknown; prev_id?: unknown }>(c);
   if (!parsedBody.ok) return parsedBody.response;
   const parsed = parseNewPayload(parsedBody.value);
   if (!parsed.ok) return c.json({ error: parsed.error }, 400);
 
+  // Explicit prev_id branch: validate cross-spec membership, then run the
+  // 2-statement insert. Spec existence is implied by a matching prev_id.
+  if (parsedBody.value.prev_id !== undefined && parsedBody.value.prev_id !== null) {
+    if (typeof parsedBody.value.prev_id !== 'string') {
+      return c.json({ error: 'prev_id must be string or null' }, 400);
+    }
+    const prevId = parsedBody.value.prev_id;
+    const prev = await c.env.DB
+      .prepare('SELECT spec_id FROM tasks WHERE id = ?')
+      .bind(prevId)
+      .first<{ spec_id: string }>();
+    if (!prev) return c.json({ error: 'prev_id task not found' }, 400);
+    if (prev.spec_id !== specId) {
+      return c.json({ error: 'prev_id must belong to the same spec' }, 400);
+    }
+
+    const id = ulid();
+    const t = now();
+    try {
+      await c.env.DB.batch([
+        c.env.DB
+          .prepare(
+            'UPDATE tasks SET prev_id = ?, updated_at = ? WHERE spec_id = ? AND prev_id = ?',
+          )
+          .bind(id, t, specId, prevId),
+        c.env.DB
+          .prepare(
+            'INSERT INTO tasks (id, spec_id, title, body, status, prev_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+          )
+          .bind(id, specId, parsed.value.title, parsed.value.body, 'todo', prevId, t, t),
+      ]);
+    } catch (e) {
+      // A concurrent insert/delete may have changed the chain between our
+      // SELECT and the batch (e.g. another writer raced to occupy the same
+      // slot, or prev was deleted and rewired). Either way, retry with fresh
+      // state.
+      if (isUniqueViolation(e)) {
+        return c.json({ error: 'concurrent task insert, retry' }, 409);
+      }
+      throw e;
+    }
+    return c.json(await readTask(c.env.DB, id), 201);
+  }
+
+  // Default branch: auto-append to the tail. Single statement to avoid the
+  // round-trip of a separate tail lookup.
   const id = ulid();
   const t = now();
   let result;

@@ -45,7 +45,7 @@ const USAGE = {
   'spec.show': 'jjplan spec show <id>',
   'spec.set': `jjplan spec set <id> [--title T] [--body B] [--status ${SPEC_STATUSES.join('|')}]`,
   'spec.rm': 'jjplan spec rm <id>',
-  'task.new': 'jjplan task new <spec_id> <title>',
+  'task.new': 'jjplan task new <spec_id> <title> [--after <prev_task_id>]',
   'task.ls': 'jjplan task ls <spec_id>',
   'task.set': `jjplan task set <id> [--title T] [--body B] [--status ${TASK_STATUSES.join('|')}]`,
   'task.rm': 'jjplan task rm <id>',
@@ -249,6 +249,37 @@ function parseSpecNewArgs(args: string[]): { project: string; title: string; pre
   return prevId ? { project, title, prevId } : { project, title };
 }
 
+function parseTaskNewArgs(args: string[]): { specId: string; title: string; prevId?: string } {
+  let specId: string | undefined;
+  let title: string | undefined;
+  let prevId: string | undefined;
+
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (arg === undefined) continue;
+    if (arg === '--after') {
+      if (prevId !== undefined) dieUsage('task.new', 'duplicate --after');
+      prevId = args[++i];
+      if (typeof prevId !== 'string' || prevId.length === 0 || prevId.startsWith('--')) {
+        dieUsage('task.new', 'missing <prev_task_id> after --after');
+      }
+    } else if (arg.startsWith('--')) {
+      dieUsage('task.new', `unknown option ${arg}`);
+    } else if (specId === undefined) {
+      specId = arg;
+    } else if (title === undefined) {
+      title = arg;
+    } else {
+      dieUsage('task.new', `unexpected argument ${arg}`);
+    }
+  }
+
+  if (specId === undefined) dieUsage('task.new', 'missing <spec_id>');
+  if (title === undefined) dieUsage('task.new', 'missing <title>');
+  validateTitle(title);
+  return prevId ? { specId, title, prevId } : { specId, title };
+}
+
 function requireNoArgs(args: string[], command: UsageKey): void {
   if (args.length > 0) dieUsage(command, `unexpected argument ${args[0]}`);
 }
@@ -310,19 +341,13 @@ const commands: Record<string, Handler> = {
     await api('DELETE', `/specs/${encodeURIComponent(id)}`);
   },
 
-  async 'task.new'([specId, title, ...rest]) {
-    if (!specId || specId.startsWith('--')) dieUsage('task.new', 'missing <spec_id>');
-    if (!title || title.startsWith('--')) dieUsage('task.new', 'missing <title>');
-    if (rest.length > 0) dieUsage('task.new', `unexpected argument ${rest[0]}`);
-    validateTitle(title);
+  async 'task.new'(args) {
+    const { specId, title, prevId } = parseTaskNewArgs(args);
     const body = readStdin();
     validateBody(body);
-    print(
-      await api('POST', `/specs/${encodeURIComponent(specId)}/tasks`, {
-        title,
-        body,
-      }),
-    );
+    const payload: { title: string; body: string; prev_id?: string } = { title, body };
+    if (prevId) payload.prev_id = prevId;
+    print(await api('POST', `/specs/${encodeURIComponent(specId)}/tasks`, payload));
   },
 
   async 'task.ls'([specId, ...rest]) {
@@ -372,7 +397,7 @@ project (name, 主键)
 
 - project 自动 upsert: spec new 首次提及该 project 名即创建; 无 \`project new\`.
 - spec 链: --after 连接 (A->B->C); 不允许 fork (同一 prev_id 至多一个后继).
-- task 链: 新建自动追加链尾; 顺序无法手动调整.
+- task 链: --after 连接, 不传则追加链尾; 中间插入会把原后继自动接到新 task (A->B->C, --after A 新建 X => A->X->B->C). 不允许 fork.
 - 删中间节点自动接续: A->B->C 删 B 后变 A->C.
 
 # I/O CONTRACT
@@ -424,12 +449,13 @@ jjplan spec rm <id>
   -> 空 | 404 | 409 并发冲突 (重读后再试).
 
 # TASK
-jjplan task new <spec_id> <title>
+jjplan task new <spec_id> <title> [--after <prev_task_id>]
   在 spec 下新建 task; status 固定为 \`todo\`; body 从 stdin 读.
-  自动追加到该 spec 的 task 链尾.
+  默认追加到该 spec 的 task 链尾.
+  --after: 接在 prev_task_id 之后; 若 prev 有后继, 原后继的 prev_id 自动改为新 task (A->B->C, --after A => A->X->B->C). prev 必须同 spec.
   推荐 body 结构: 操作步骤 (1./2./3.) + 验收条件 + 涉及文件路径.
   -> {id, spec_id, title, body, status:"todo", prev_id, created_at, updated_at}
-  错误: 404 spec 不存在 | 409 并发竞争 (重试).
+  错误: 400 prev 跨 spec/不存在 | 404 spec 不存在 (仅在不传 --after 时触发) | 409 并发竞争 (重试).
 
 jjplan task ls <spec_id>
   列该 spec 的 task (链序). 等价于 \`spec show <spec_id>\` 取 .tasks 字段.
@@ -447,18 +473,33 @@ jjplan task rm <id>
 spec
   draft   刚 spec new, 仍在规划; 可反复 spec set 修订 title/body.
   active  已开始执行 (推荐: 创建首个 task 时一并切到 active).
-  done    所有 task 已 done 后切; 终态.
+  done    语义完成态; 所有 task 已 done 后再切.
   推荐流: draft -> active -> done.
 
 task
   todo    待办. 默认状态.
   doing   正在执行. 推荐一次仅一条 task 处于 doing.
-  done    完成. 终态.
+  done    语义完成态.
   blocked 受阻 (依赖未满足/外部资源/需用户决策). 切到 blocked 时把原因写入 body;
           解除后切回 todo 或 doing.
   推荐流: todo -> doing -> done; 任何非 done 状态可临时 -> blocked.
 
 注: 系统不做状态机硬校验, 任何状态间均可切换; 由 AI 主动遵循上述规则.
+
+# EXECUTION 执行规则
+何时依序: 遇链式结构沿 prev_id 从头推进, 不跳序.
+- task 是严格单链, 必须按链序 todo -> doing -> done.
+- spec 经 --after 串成链 (A -> B -> C) 时, 必须先完成 A 才开始 B.
+- 单节点 spec (无 --after, 无后继) 不构成链, 独立执行即可.
+
+何时按用户指定: 链中部分节点已 done 但仍有节点未 done 时, 用户可显式点名某个 id 跳过链序直接推进.
+- 适用: 中段 task 仍 todo/blocked, 用户指定先做后段某条; 或先解 blocked 项的外部依赖.
+- AI 不得自作主张跳序; 唯一脱链途径是用户明确指定目标 id.
+
+判定流程:
+1. 用户未指定 id -> 沿当前 spec 的 task 链找首个非 done 项推进.
+2. 用户指定 id -> 按该 id 推进, 即使前序未全 done.
+3. spec 整体切 done 必须在其所有 task 都已 done 之后.
 
 # TYPICAL FLOW
 # 1. 接需求, 写 SPEC (body 从 stdin)
@@ -500,6 +541,7 @@ jjplan spec set 01HX... --status done
 - body 在 \`spec new\` / \`task new\` 中只能从 stdin 读; \`spec set\` / \`task set\`
   改 body 用 --body flag (非 stdin).
 - project 没有 \`new\` 子命令; 必须靠 \`spec new\` 首次写入触发 upsert.
+- 删除 project 下所有 spec 不会自动删除 project; 只有 \`project rm\` 会删除 project.
 - id 一律 ULID, 必须从前一条响应 JSON 取; 不可凭空构造或截断.
 - spec 不允许 fork: 同一 prev_spec_id 只能被一条 spec 引用; 二次引用返回 409.
 - 删除 (project rm / spec rm / task rm) 都是不可逆的, 仅在用户明确要求时执行.

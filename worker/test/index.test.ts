@@ -987,6 +987,124 @@ describe('POST /specs/:id/tasks', () => {
 });
 
 // =============================================================================
+// POST /specs/:id/tasks — prev_id (insert after a specific task)
+// =============================================================================
+
+describe('POST /specs/:id/tasks prev_id', () => {
+  it('explicit null prev_id is equivalent to omitting (auto-append)', async () => {
+    const a = await newSpec({ title: 'A' });
+    const t1 = await newTask(a.id, { title: 't1' });
+    const r = await jsonReq(`/specs/${a.id}/tasks`, 'POST', { title: 't2', prev_id: null });
+    expect(r.status).toBe(201);
+    const t2 = (await r.json()) as Task;
+    expect(t2.prev_id).toBe(t1.id);
+    expect((await getSpec(a.id)).tasks.map((t) => t.id)).toEqual([t1.id, t2.id]);
+  });
+
+  it('rejects non-string prev_id', async () => {
+    const a = await newSpec({ title: 'A' });
+    const r = await jsonReq(`/specs/${a.id}/tasks`, 'POST', { title: 't', prev_id: 123 });
+    expect(r.status).toBe(400);
+    expect((await r.json()).error).toMatch(/prev_id must be string/);
+  });
+
+  it('rejects unknown prev_id with 400', async () => {
+    const a = await newSpec({ title: 'A' });
+    const r = await jsonReq(`/specs/${a.id}/tasks`, 'POST', { title: 't', prev_id: FAKE_ID });
+    expect(r.status).toBe(400);
+    expect((await r.json()).error).toBe('prev_id task not found');
+  });
+
+  it('rejects prev_id pointing into another spec with 400', async () => {
+    const s1 = await newSpec({ title: 'S1' });
+    const s2 = await newSpec({ title: 'S2' });
+    const t1 = await newTask(s1.id, { title: 't1' });
+    const r = await jsonReq(`/specs/${s2.id}/tasks`, 'POST', { title: 'x', prev_id: t1.id });
+    expect(r.status).toBe(400);
+    expect((await r.json()).error).toMatch(/same spec/);
+  });
+
+  it('prev_id = tail makes the new task the new tail', async () => {
+    const a = await newSpec({ title: 'A' });
+    const t1 = await newTask(a.id, { title: 't1' });
+    const t2 = await newTask(a.id, { title: 't2' });
+    const r = await jsonReq(`/specs/${a.id}/tasks`, 'POST', { title: 't3', prev_id: t2.id });
+    expect(r.status).toBe(201);
+    const t3 = (await r.json()) as Task;
+    expect(t3.prev_id).toBe(t2.id);
+    const got = await getSpec(a.id);
+    expect(got.tasks.map((t) => t.id)).toEqual([t1.id, t2.id, t3.id]);
+    // t2.prev_id stays t1.id; the rewire UPDATE matched zero rows.
+    expect(got.tasks[1]?.prev_id).toBe(t1.id);
+  });
+
+  it('prev_id = head: A→B→C with prev=A becomes A→X→B→C', async () => {
+    const a = await newSpec({ title: 'A' });
+    const chain = await buildTaskChain(a.id);
+    const r = await jsonReq(`/specs/${a.id}/tasks`, 'POST', { title: 'X', prev_id: chain.a.id });
+    expect(r.status).toBe(201);
+    const x = (await r.json()) as Task;
+    expect(x.prev_id).toBe(chain.a.id);
+    const got = await getSpec(a.id);
+    expect(got.tasks.map((t) => t.id)).toEqual([chain.a.id, x.id, chain.b.id, chain.c.id]);
+    // B's prev_id rewired from A to X; C unchanged.
+    expect(got.tasks[2]?.prev_id).toBe(x.id);
+    expect(got.tasks[3]?.prev_id).toBe(chain.b.id);
+  });
+
+  it('prev_id = middle: A→B→C with prev=B becomes A→B→X→C', async () => {
+    const a = await newSpec({ title: 'A' });
+    const chain = await buildTaskChain(a.id);
+    const r = await jsonReq(`/specs/${a.id}/tasks`, 'POST', { title: 'X', prev_id: chain.b.id });
+    expect(r.status).toBe(201);
+    const x = (await r.json()) as Task;
+    const got = await getSpec(a.id);
+    expect(got.tasks.map((t) => t.id)).toEqual([chain.a.id, chain.b.id, x.id, chain.c.id]);
+    expect(got.tasks[2]?.prev_id).toBe(chain.b.id);
+    expect(got.tasks[3]?.prev_id).toBe(x.id);
+  });
+
+  it('repeated middle inserts at head produce A→Y→X→B→C', async () => {
+    const a = await newSpec({ title: 'A' });
+    const chain = await buildTaskChain(a.id);
+    // Insert X after A: A→X→B→C
+    const rx = await jsonReq(`/specs/${a.id}/tasks`, 'POST', { title: 'X', prev_id: chain.a.id });
+    const x = (await rx.json()) as Task;
+    // Insert Y after A again: A→Y→X→B→C
+    const ry = await jsonReq(`/specs/${a.id}/tasks`, 'POST', { title: 'Y', prev_id: chain.a.id });
+    const y = (await ry.json()) as Task;
+    const got = await getSpec(a.id);
+    expect(got.tasks.map((t) => t.id)).toEqual([chain.a.id, y.id, x.id, chain.b.id, chain.c.id]);
+    expect(got.tasks[1]?.prev_id).toBe(chain.a.id);
+    expect(got.tasks[2]?.prev_id).toBe(y.id);
+    expect(got.tasks[3]?.prev_id).toBe(x.id);
+    expect(got.tasks[4]?.prev_id).toBe(chain.b.id);
+  });
+
+  it('inserted task carries title/body/status/timestamps and bumps successor.updated_at', async () => {
+    const a = await newSpec({ title: 'A' });
+    const t1 = await newTask(a.id, { title: 't1' });
+    const t2 = await newTask(a.id, { title: 't2' });
+    await tick();
+    const r = await jsonReq(`/specs/${a.id}/tasks`, 'POST', {
+      title: 'X',
+      body: 'inserted',
+      prev_id: t1.id,
+    });
+    expect(r.status).toBe(201);
+    const x = (await r.json()) as Task;
+    expect(x).toMatchObject({ title: 'X', body: 'inserted', status: 'todo', spec_id: a.id });
+    expect(x.created_at).toBe(x.updated_at);
+    // t2 was rewired to point at X, which means its row was updated and
+    // updated_at must have advanced past its original creation time.
+    const got = await getSpec(a.id);
+    const t2After = got.tasks.find((t) => t.id === t2.id)!;
+    expect(t2After.prev_id).toBe(x.id);
+    expect(t2After.updated_at).toBeGreaterThan(t2.updated_at);
+  });
+});
+
+// =============================================================================
 // PATCH /tasks/:id
 // =============================================================================
 
