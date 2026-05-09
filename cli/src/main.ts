@@ -361,42 +361,153 @@ function printHelp(): void {
   process.stdout.write(
     `jjplan ${VERSION}
 
-AI-facing CLI for the jjplan Spec/Task system.
-Success prints compact JSON to stdout unless noted. Errors are one-line stderr plus non-zero exit.
-Bodies for new specs/tasks are read from stdin; no stdin means empty body.
-Limits: title 1..${MAX_TITLE_LEN} chars, body 0..${MAX_BODY_LEN} chars, project 1..${MAX_PROJECT_NAME_LEN} chars.
+# PURPOSE
+Spec/Task 计划跟踪 CLI, 专为 AI 调用设计. 数据存远端 Cloudflare D1, 本地是无状态客户端.
+工作循环: 接需求 -> 写 SPEC -> 拆 TASK -> 推 status (todo->doing->done) -> SPEC 收尾.
 
-Project scoping:
-  spec new / spec ls take an explicit <project> positional argument supplied
-  by the caller (e.g. the AI passes its working-directory basename). The
-  project is upserted on first spec.new. Other commands address specs and
-  tasks by id, independent of any project.
+# DATA MODEL
+project (name, 主键)
+  -- spec (id=ULID, 同项目内可形成 0..N 条独立链)
+       -- task (id=ULID, 每个 spec 一条严格链)
 
-Commands:
-  jjplan help | jjplan --help -> help text
-  jjplan --version -> version
-  jjplan project ls -> project[] JSON (with specs+tasks nested)
-  ${USAGE['project.rm']} -> empty
-  ${USAGE['spec.new']} -> spec JSON (project upserted on first sight)
-  ${USAGE['spec.ls']} -> spec[] JSON for that project
-  jjplan spec show <id> -> spec JSON
-  ${USAGE['spec.set']} -> spec JSON
-  jjplan spec rm <id> -> empty
-  ${USAGE['task.new']} -> task JSON
-  jjplan task ls <spec_id> -> task[] JSON
-  ${USAGE['task.set']} -> task JSON
-  jjplan task rm <id> -> empty
-  jjplan self-update -> install latest release binary
-  jjplan uninstall -> remove installed binary
+- project 自动 upsert: spec new 首次提及该 project 名即创建; 无 \`project new\`.
+- spec 链: --after 连接 (A->B->C); 不允许 fork (同一 prev_id 至多一个后继).
+- task 链: 新建自动追加链尾; 顺序无法手动调整.
+- 删中间节点自动接续: A->B->C 删 B 后变 A->C.
 
-Rules:
-  Use ids from JSON responses.
-  Unknown commands, unknown options, extra args, and invalid statuses are errors.
-  spec.status: ${SPEC_STATUSES.join('|')}
-  task.status: ${TASK_STATUSES.join('|')}
+# I/O CONTRACT
+- 输入: 位置参数 + flag; body 字段在 \`new\` 命令中从 stdin 读 (TTY 检测, 无 stdin = 空 body).
+- 输出: 单行 JSON 到 stdout; DELETE 类返回空 (HTTP 204).
+- 错误: 单行 stderr \`jjplan: <msg>\` + 非零 exit code; 客户端不重试.
+- id 一律 ULID; 必须从响应 JSON 抓取, 不可凭空构造.
+- 限长: title 1..${MAX_TITLE_LEN}, body 0..${MAX_BODY_LEN}, project 1..${MAX_PROJECT_NAME_LEN} (chars).
 
-Config: ${CONFIG_PATH}
-        {"endpoint":"https://jjplan.<acct>.workers.dev","token":"<your password>"}
+# META
+jjplan help | --help          打印本帮助
+jjplan --version              打印版本
+jjplan self-update            重装最新版本; 仅在用户明确要求时执行
+jjplan uninstall              卸载; 仅在用户明确要求时执行
+
+# PROJECT
+jjplan project ls
+  列所有 project, 嵌套展开 specs (链序) 与 tasks (链序), 一次拉完.
+  -> [{name, created_at, updated_at, specs:[{...spec, tasks:[...task]}]}]
+
+jjplan project rm <name>
+  删 project; cascade 删该项目下全部 specs 与 tasks. 不可逆.
+  -> 空 | 404 项目不存在.
+
+# SPEC
+jjplan spec new <project> <title> [--after <prev_spec_id>]
+  在 project 下新建 spec; status 固定为 \`draft\`; body 从 stdin 读.
+  推荐 body 结构: ## 背景 / ## 目标 / ## 方案 / ## 兼容性.
+  --after: 接在 prev_spec_id 之后; prev 必须同项目且尚无后继.
+  -> {id, project_id, title, body, status:"draft", prev_id, created_at, updated_at}
+  错误: 400 prev 跨项目/不存在 | 409 prev 已有后继.
+
+jjplan spec ls <project>
+  列项目内所有 spec (链序, 多条独立链按各自 head 的 created_at 倒序),
+  每个 spec 内嵌 tasks (链序).
+  -> [{...spec, tasks:[...task]}] | 404 项目不存在.
+
+jjplan spec show <id>
+  读单个 spec, 内嵌 tasks (链序).
+  -> {...spec, tasks:[...task]} | 404.
+
+jjplan spec set <id> [--title T] [--body B] [--status ${SPEC_STATUSES.join('|')}]
+  改 spec; 至少传一个 flag. --body 是完整覆盖 (非追加), 多行 markdown 用
+  --body "$(cat file.md)".
+  -> {...spec} | 400 无字段/status 非法 | 404.
+
+jjplan spec rm <id>
+  删 spec; cascade 删该 spec 所有 task; 链中前后自动接续. 不可逆.
+  -> 空 | 404 | 409 并发冲突 (重读后再试).
+
+# TASK
+jjplan task new <spec_id> <title>
+  在 spec 下新建 task; status 固定为 \`todo\`; body 从 stdin 读.
+  自动追加到该 spec 的 task 链尾.
+  推荐 body 结构: 操作步骤 (1./2./3.) + 验收条件 + 涉及文件路径.
+  -> {id, spec_id, title, body, status:"todo", prev_id, created_at, updated_at}
+  错误: 404 spec 不存在 | 409 并发竞争 (重试).
+
+jjplan task ls <spec_id>
+  列该 spec 的 task (链序). 等价于 \`spec show <spec_id>\` 取 .tasks 字段.
+  -> [...task] | 404 spec 不存在.
+
+jjplan task set <id> [--title T] [--body B] [--status ${TASK_STATUSES.join('|')}]
+  改 task; 至少传一个 flag. --body 是完整覆盖 (非追加).
+  -> {...task} | 400 | 404.
+
+jjplan task rm <id>
+  删 task; 链中前后自动接续. 不可逆.
+  -> 空 | 404 | 409.
+
+# STATUS 语义与流转
+spec
+  draft   刚 spec new, 仍在规划; 可反复 spec set 修订 title/body.
+  active  已开始执行 (推荐: 创建首个 task 时一并切到 active).
+  done    所有 task 已 done 后切; 终态.
+  推荐流: draft -> active -> done.
+
+task
+  todo    待办. 默认状态.
+  doing   正在执行. 推荐一次仅一条 task 处于 doing.
+  done    完成. 终态.
+  blocked 受阻 (依赖未满足/外部资源/需用户决策). 切到 blocked 时把原因写入 body;
+          解除后切回 todo 或 doing.
+  推荐流: todo -> doing -> done; 任何非 done 状态可临时 -> blocked.
+
+注: 系统不做状态机硬校验, 任何状态间均可切换; 由 AI 主动遵循上述规则.
+
+# TYPICAL FLOW
+# 1. 接需求, 写 SPEC (body 从 stdin)
+cat <<'MD' | jjplan spec new myrepo "添加 GitHub OAuth 登录"
+## 背景
+现有仅密码登录.
+## 目标
+支持 GitHub OAuth, 不破坏既有 session.
+## 方案
+1. 加 oauth_tokens 表
+2. /auth/github 路由
+3. 前端登录页加按钮
+## 兼容性
+旧 token 继续有效.
+MD
+# -> {"id":"01HX...","status":"draft",...}
+
+# 2. 切 active, 开始拆 task
+jjplan spec set 01HX... --status active
+
+# 3. 拆 task (body 从 stdin)
+cat <<'MD' | jjplan task new 01HX... "schema: oauth_tokens 表"
+1. 写 worker/migrations/0002_oauth.sql
+2. wrangler d1 migrations apply
+验收: 新表存在, 测试通过.
+MD
+# -> {"id":"01HY...","status":"todo",...}
+
+# 4. 推进 task
+jjplan task set 01HY... --status doing
+# ...写代码...
+jjplan task set 01HY... --status done
+
+# 5. 该 spec 下所有 task 已 done, 收尾 spec
+jjplan spec set 01HX... --status done
+
+# PITFALLS
+- 命令是 \`jjplan <noun> <verb> ...\` (空格分隔), 不要写成 \`jjplan spec.new\`.
+- body 在 \`spec new\` / \`task new\` 中只能从 stdin 读; \`spec set\` / \`task set\`
+  改 body 用 --body flag (非 stdin).
+- project 没有 \`new\` 子命令; 必须靠 \`spec new\` 首次写入触发 upsert.
+- id 一律 ULID, 必须从前一条响应 JSON 取; 不可凭空构造或截断.
+- spec 不允许 fork: 同一 prev_spec_id 只能被一条 spec 引用; 二次引用返回 409.
+- 删除 (project rm / spec rm / task rm) 都是不可逆的, 仅在用户明确要求时执行.
+- 客户端不重试 409; 拿到后应重新查询当前状态再决策.
+
+# CONFIG
+${CONFIG_PATH}
+  {"endpoint":"https://jjplan.<acct>.workers.dev","token":"<password>"}
 `,
   );
 }
