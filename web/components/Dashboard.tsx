@@ -385,9 +385,9 @@ export default function Dashboard() {
       <div className="min-h-screen flex items-center justify-center px-4">
         <div className="w-full max-w-sm">
           <div className="text-center mb-8">
-            <h1 className="text-3xl font-semibold tracking-tight">jjplan</h1>
-            <p className="mt-2 text-sm text-zinc-500">
-              dashboard · 输入密码以继续
+            <h1 className="text-5xl font-black tracking-tight text-zinc-50">JJ</h1>
+            <p className="mt-3 text-sm text-zinc-500">
+              console · 输入密码以继续
             </p>
           </div>
           <div className="space-y-3">
@@ -622,7 +622,7 @@ interface BreadcrumbProps {
 
 function Breadcrumb({ route, activeSpecTitle, onNavigate }: BreadcrumbProps) {
   const segments: { label: string; route: Route | null }[] = [
-    { label: 'jjplan', route: { kind: 'home' } },
+    { label: 'JJ', route: { kind: 'home' } },
   ];
   if (route.kind !== 'home') {
     segments.push({
@@ -647,7 +647,11 @@ function Breadcrumb({ route, activeSpecTitle, onNavigate }: BreadcrumbProps) {
           {seg.route ? (
             <button
               onClick={() => onNavigate(seg.route!)}
-              className="text-zinc-400 hover:text-zinc-100 transition truncate"
+              className={
+                idx === 0
+                  ? 'font-black tracking-tight text-zinc-100 hover:text-white transition'
+                  : 'text-zinc-400 hover:text-zinc-100 transition truncate'
+              }
             >
               {seg.label}
             </button>
@@ -655,7 +659,7 @@ function Breadcrumb({ route, activeSpecTitle, onNavigate }: BreadcrumbProps) {
             <span
               className={
                 idx === 0
-                  ? 'font-semibold tracking-tight'
+                  ? 'font-black tracking-tight text-zinc-50'
                   : 'text-zinc-100 truncate'
               }
             >

@@ -2,6 +2,17 @@
 
 本文件记录 jjplan 的版本变更, 格式参考 [Keep a Changelog](https://keepachangelog.com).
 
+## [0.8.5] - 2026-05-15
+
+### Changed
+
+- Web 控制台品牌名简化: HTML `<title>` 由 `jjplan` 改为 `JJ`; 登录页 H1 由 `jjplan` (text-3xl font-semibold) 升级为 `JJ` (text-5xl font-black tracking-tight), 字号 +2 档、字重至 900、显式高对比白色, 突出极简两字母品牌; 副标题文案 `dashboard · 输入密码以继续` 改为 `console · 输入密码以继续`, 与品牌简化呼应.
+- 顶栏面包屑根节点 (登录后所有页面顶部可见) label 由 `jjplan` 改为 `JJ`, 并在 button/span 两种渲染分支下统一应用 `font-black tracking-tight` 高亮样式 (原仅在首页页面态下加粗), 跨页面保持品牌一致.
+
+### Notes
+
+- 零 BREAKING. CLI 名 `jjplan` / `jjask` 不变, Worker/Schema/API/数据模型零变化. 登录页底部"创建 plan / task / ask 请使用 jjplan / jjask CLI"引导文案仍指向真实 CLI 名.
+
 ## [0.8.4] - 2026-05-15
 
 ### Added

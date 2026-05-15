@@ -4,7 +4,7 @@ import type { Metadata } from 'next';
 const VERSION = process.env.NEXT_PUBLIC_JJPLAN_VERSION ?? 'dev';
 
 export const metadata: Metadata = {
-  title: 'jjplan',
+  title: 'JJ',
   description: 'jjplan dashboard',
 };
 
