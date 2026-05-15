@@ -2,6 +2,20 @@
 
 本文件记录 jjplan 的版本变更, 格式参考 [Keep a Changelog](https://keepachangelog.com).
 
+## [0.8.1] - 2026-05-15
+
+### Changed
+
+- Web ASKS 区 UX 重构: 独立 ask (无 prev / 无后续的 length=1 链) 改用 CSS Grid `auto-fill minmax(22rem,1fr)` 多列网格, 1440px 宽屏可排 4 列, 解决原先每张独立卡片独占一行右侧 70% 空白的问题. 真正的链 (length>=2) 仍走 ChainGraph 单行横滚, 链头→尾箭头语义不变.
+- ASKS 区整体加 `max-h: 28rem` + `overflow-y-auto`, asks 再多也不会把 PLANS 推下去, 第一屏 PLANS 始终可见.
+- ASKS header 计数细化: 同时存在独立 ask 与链时追加 `· K standalone · M chains` 副标签; 单一形态省略副标签避免冗余.
+- ChainGraph 横向滚动条 (ASKS 链 / PLANS 链) 隐藏: globals.css 新增 `.no-scrollbar` 工具类 (`scrollbar-width: none` + WebKit `::-webkit-scrollbar { display: none }`), 横向溢出仍可拖动滚动, 仅去掉视觉滚动条占位. 纵向 ASKS 滚动条保留以提示可滚.
+
+### Notes
+
+- 零 BREAKING. 不动 API / 数据模型 / 路由 / 持久化. 仅 `web/components/AsksView.tsx` 内的 className 与渲染分支调整, AskCard / ChainGraph / lib/chain 保持原状.
+- AskCard 自身宽度由父级决定 (grid 路径 `w-full`, chains 路径外层包 `w-[22rem] shrink-0`), 行为一致.
+
 ## [0.8.0] - 2026-05-15
 
 ### Added

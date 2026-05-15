@@ -14,43 +14,100 @@ interface Props {
 }
 
 export default function AsksView({ asks, onEdit, onDelete }: Props) {
-  const chains = useMemo(() => (asks ? buildChains(asks) : []), [asks]);
+  // Split chains: length=1 (standalone) flows into a CSS grid so独立 ask 在宽屏并排,
+  // length>=2 (real chains) keep ChainGraph 的横向链式语义。
+  const { standalones, chains } = useMemo(() => {
+    if (!asks) return { standalones: [] as Ask[], chains: [] as Ask[][] };
+    const all = buildChains(asks);
+    const standalones: Ask[] = [];
+    const chains: Ask[][] = [];
+    for (const c of all) {
+      if (c.length === 1) standalones.push(c[0]);
+      else chains.push(c);
+    }
+    return { standalones, chains };
+  }, [asks]);
 
   if (asks === null) {
     return (
       <section className="space-y-3">
-        <Header count={null} />
+        <Header total={null} standalone={0} chains={0} />
         <div className="text-xs text-zinc-500">loading…</div>
       </section>
     );
   }
+
+  const isEmpty = standalones.length === 0 && chains.length === 0;
+
   return (
     <section className="space-y-3">
-      <Header count={asks.length} />
-      <ChainGraph
-        chains={chains}
-        emptyText="(no asks)"
-        renderNode={(ask) => (
-          <AskCard
-            ask={ask}
-            onEdit={() => onEdit(ask)}
-            onDelete={() => onDelete(ask)}
-          />
-        )}
+      <Header
+        total={asks.length}
+        standalone={standalones.length}
+        chains={chains.length}
       />
+      {isEmpty ? (
+        <div className="text-sm text-zinc-400 italic px-4 py-8 text-center">
+          (no asks)
+        </div>
+      ) : (
+        <div className="max-h-[28rem] overflow-y-auto overflow-x-hidden pr-1 space-y-4">
+          {standalones.length > 0 && (
+            <div className="grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(22rem,1fr))]">
+              {standalones.map((ask) => (
+                <AskCard
+                  key={ask.id}
+                  ask={ask}
+                  onEdit={() => onEdit(ask)}
+                  onDelete={() => onDelete(ask)}
+                />
+              ))}
+            </div>
+          )}
+          {chains.length > 0 && (
+            <ChainGraph
+              chains={chains}
+              renderNode={(ask) => (
+                <div className="w-[22rem] shrink-0">
+                  <AskCard
+                    ask={ask}
+                    onEdit={() => onEdit(ask)}
+                    onDelete={() => onDelete(ask)}
+                  />
+                </div>
+              )}
+            />
+          )}
+        </div>
+      )}
     </section>
   );
 }
 
-function Header({ count }: { count: number | null }) {
+function Header({
+  total,
+  standalone,
+  chains,
+}: {
+  total: number | null;
+  standalone: number;
+  chains: number;
+}) {
   return (
     <div className="flex items-baseline gap-3 flex-wrap">
       <h3 className="text-sm font-semibold uppercase tracking-wider text-zinc-300">
         asks
       </h3>
-      {count !== null && (
+      {total !== null && (
         <span className="text-[11px] text-zinc-500">
-          {count} {count === 1 ? 'ask' : 'asks'}
+          {total} {total === 1 ? 'ask' : 'asks'}
+          {standalone > 0 && chains > 0 && (
+            <>
+              {' · '}
+              {standalone} standalone {' · '}
+              {chains} {chains === 1 ? 'chain' : 'chains'}
+            </>
+          )}
         </span>
       )}
     </div>
@@ -71,7 +128,7 @@ function AskCard({
   const mayOverflow = useMemo(() => bodyMayOverflow(ask.body), [ask.body]);
 
   return (
-    <div className="w-[22rem] shrink-0 rounded-lg border border-zinc-800 bg-zinc-950 hover:border-zinc-600 transition p-3 flex flex-col gap-2">
+    <div className="w-full min-w-0 rounded-lg border border-zinc-800 bg-zinc-950 hover:border-zinc-600 transition p-3 flex flex-col gap-2">
       <div
         className={
           expanded

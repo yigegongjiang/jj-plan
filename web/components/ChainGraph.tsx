@@ -32,7 +32,7 @@ export default function ChainGraph<T extends NodeLike>({
       {chains.map((chain) => (
         <div
           key={chain[0].id}
-          className="overflow-x-auto -mx-4 px-4 pb-1"
+          className="overflow-x-auto no-scrollbar -mx-4 px-4"
         >
           <div className="flex items-stretch gap-2 min-w-max">
             {chain.map((node, idx) => (
