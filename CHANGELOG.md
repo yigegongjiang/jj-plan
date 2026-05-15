@@ -2,6 +2,17 @@
 
 本文件记录 jjplan 的版本变更, 格式参考 [Keep a Changelog](https://keepachangelog.com).
 
+## [0.8.4] - 2026-05-15
+
+### Added
+
+- Web 首页 project 卡片新增 asks 计数: 在原有 `N plans · N tasks` 后追加 `· N asks`, 单复数与既有字段一致 (`1 ask` / `N asks`). 一眼看出每个项目的人机交互记录密度.
+- Worker `GET /projects` 响应新增 `asks_count: number` 字段, 用 `COUNT(*) GROUP BY project_id` 一次性聚合, 不嵌入 ask 数组以保持列表接口轻量. 项目无 ask 时计数为 0.
+
+### Notes
+
+- 零 BREAKING. 旧客户端忽略新字段即可; CLI 行为/数据模型零变化.
+
 ## [0.8.3] - 2026-05-15
 
 ### Changed

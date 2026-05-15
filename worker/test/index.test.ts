@@ -59,6 +59,7 @@ interface SpecWithTasks extends Spec {
 }
 interface ProjectWithSpecs extends Project {
   specs: SpecWithTasks[];
+  asks_count: number;
 }
 interface Ask {
   id: string;
@@ -520,6 +521,25 @@ describe('projects', () => {
     const projects = await listProjects();
     const spec = projects[0]?.specs[0];
     expect(spec?.tasks.map((t) => t.id)).toEqual([tc.a.id, tc.b.id, tc.c.id]);
+  });
+
+  it('GET /projects exposes asks_count per project (0 when no asks)', async () => {
+    await newSpec({ title: 'A' }, 'alpha');
+    const projects = await listProjects();
+    expect(projects.find((p) => p.name === 'alpha')?.asks_count).toBe(0);
+  });
+
+  it('GET /projects exposes asks_count per project (multi-project, independent counts)', async () => {
+    await newSpec({ title: 'A' }, 'alpha');
+    await newSpec({ title: 'A' }, 'beta');
+    await newAsk({ body: 'q1' }, 'alpha');
+    await newAsk({ body: 'q2' }, 'alpha');
+    await newAsk({ body: 'q3' }, 'alpha');
+    await newAsk({ body: 'q1' }, 'beta');
+
+    const projects = await listProjects();
+    expect(projects.find((p) => p.name === 'alpha')?.asks_count).toBe(3);
+    expect(projects.find((p) => p.name === 'beta')?.asks_count).toBe(1);
   });
 
   it('GET /projects/:name/specs requires the project to exist', async () => {

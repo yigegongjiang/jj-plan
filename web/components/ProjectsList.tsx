@@ -22,6 +22,7 @@ export default function ProjectsList({ projects, onOpen, onDelete }: Props) {
     <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
       {projects.map((p) => {
         const taskCount = p.specs.reduce((n, s) => n + s.tasks.length, 0);
+        const askCount = p.asks_count;
         return (
           <button
             key={p.name}
@@ -33,7 +34,8 @@ export default function ProjectsList({ projects, onOpen, onDelete }: Props) {
             </div>
             <div className="text-xs text-zinc-500">
               {p.specs.length} {p.specs.length === 1 ? 'plan' : 'plans'} ·{' '}
-              {taskCount} {taskCount === 1 ? 'task' : 'tasks'}
+              {taskCount} {taskCount === 1 ? 'task' : 'tasks'} ·{' '}
+              {askCount} {askCount === 1 ? 'ask' : 'asks'}
             </div>
             <div className="mt-1 flex items-center justify-between gap-2">
               <span className="text-[11px] text-zinc-400 font-mono truncate">

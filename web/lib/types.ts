@@ -35,6 +35,7 @@ export interface Project {
   created_at: number;
   updated_at: number;
   specs: Spec[];
+  asks_count: number;
 }
 
 export const ASK_LIMIT_DEFAULT = 3;

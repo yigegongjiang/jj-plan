@@ -278,12 +278,19 @@ function bundleSpecs(
 // One-shot: every project, with its ordered specs (each with its ordered
 // tasks). Browsing client renders this without a second round-trip.
 app.get('/projects', async (c) => {
-  const [{ results: projectRows }, { results: specRows }, { results: taskRows }] =
-    await Promise.all([
-      c.env.DB.prepare('SELECT * FROM projects ORDER BY updated_at DESC').all<ProjectRow>(),
-      c.env.DB.prepare('SELECT * FROM specs').all<SpecRow>(),
-      c.env.DB.prepare('SELECT * FROM tasks').all<TaskRow>(),
-    ]);
+  const [
+    { results: projectRows },
+    { results: specRows },
+    { results: taskRows },
+    { results: askCountRows },
+  ] = await Promise.all([
+    c.env.DB.prepare('SELECT * FROM projects ORDER BY updated_at DESC').all<ProjectRow>(),
+    c.env.DB.prepare('SELECT * FROM specs').all<SpecRow>(),
+    c.env.DB.prepare('SELECT * FROM tasks').all<TaskRow>(),
+    c.env.DB
+      .prepare('SELECT project_id, COUNT(*) AS n FROM asks GROUP BY project_id')
+      .all<{ project_id: string; n: number }>(),
+  ]);
 
   const specsByProject = new Map<string, SpecRow[]>();
   for (const s of specRows) {
@@ -292,11 +299,15 @@ app.get('/projects', async (c) => {
     else specsByProject.set(s.project_id, [s]);
   }
 
+  const askCountByProject = new Map<string, number>();
+  for (const r of askCountRows) askCountByProject.set(r.project_id, r.n);
+
   const tasksBySpec = indexTasks(taskRows);
   return c.json(
     projectRows.map((p) => ({
       ...p,
       specs: bundleSpecs(specsByProject.get(p.name) ?? [], tasksBySpec),
+      asks_count: askCountByProject.get(p.name) ?? 0,
     })),
   );
 });
