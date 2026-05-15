@@ -1,11 +1,18 @@
 import './globals.css';
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 
 const VERSION = process.env.NEXT_PUBLIC_JJPLAN_VERSION ?? 'dev';
 
 export const metadata: Metadata = {
   title: 'JJ',
   description: 'jjplan dashboard',
+};
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  viewportFit: 'cover',
+  themeColor: '#09090b',
 };
 
 export default function RootLayout({

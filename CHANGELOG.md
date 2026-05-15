@@ -2,6 +2,16 @@
 
 本文件记录 jjplan 的版本变更, 格式参考 [Keep a Changelog](https://keepachangelog.com).
 
+## [0.8.10] - 2026-05-15
+
+### Changed
+
+- **iPhone 顶部安全区 (沉浸式)**: mobile Safari scroll-aware 顶栏隐藏后 main 内容真正滑到状态栏/灵动岛背后, 不再有黑色空白带. 4 处改动 — (1) `app/layout.tsx` 导出 `viewport = { viewportFit: 'cover', themeColor: '#09090b' }`, 在 `<meta name=viewport>` 注入 `viewport-fit=cover`, 允许 content 延伸过 safe area, 同时 PWA 状态栏色与页面 zinc-950 一致; (2) `Dashboard.tsx` `<header>` 由 `sticky top-0` 改为 `fixed top-0 inset-x-0`, 关键: sticky 元素 translate 隐藏后仍占 normal-flow 布局空间 (= `safe_top + h-12` 高度) 会堵住 main 顶部, 改 fixed 后脱离布局流, main 可滑至屏顶; header 自身 `pt-[env(safe-area-inset-top)]` 让背景延伸状态栏背后并把 breadcrumb 推到安全区下方; (3) `Dashboard.tsx` `<main>` 加 `mt-[calc(env(safe-area-inset-top)+3rem)] sm:mt-[calc(env(safe-area-inset-top)+3.5rem)]` 补偿 fixed header 占位, 保持初始视觉间距不变; (4) `ProjectTabs.tsx` sticky tabs 的 `top` 由 `top-12 sm:top-14` 改为 `top-[calc(3rem+env(safe-area-inset-top))] sm:top-[calc(3.5rem+env(safe-area-inset-top))]`, 跟随 header 总高度紧贴 header 下沿.
+
+### Notes
+
+- 零 BREAKING. 桌面端零视觉变化 (env 在无 safe-area 设备上 = 0; fixed vs sticky 在桌面无 scrollHidden 场景下等价). 不影响底部 home indicator 区域版本号 v 角标.
+
 ## [0.8.9] - 2026-05-15
 
 ### Fixed

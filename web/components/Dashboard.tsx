@@ -432,7 +432,7 @@ export default function Dashboard() {
     <div className="min-h-screen">
       <header
         className={
-          'sticky top-0 z-20 bg-zinc-950 sm:bg-zinc-950/80 sm:backdrop-blur border-b border-zinc-800 transition-transform duration-200 ease-out ' +
+          'fixed top-0 inset-x-0 z-20 bg-zinc-950 sm:bg-zinc-950/80 sm:backdrop-blur border-b border-zinc-800 pt-[env(safe-area-inset-top)] transition-transform duration-200 ease-out ' +
           (scrollHidden
             ? '-translate-y-full sm:translate-y-0'
             : 'translate-y-0')
@@ -446,7 +446,7 @@ export default function Dashboard() {
         </div>
       </header>
 
-      <main className="px-3 sm:px-4 py-3 sm:py-6 space-y-4">
+      <main className="px-3 sm:px-4 mt-[calc(env(safe-area-inset-top)+3rem)] sm:mt-[calc(env(safe-area-inset-top)+3.5rem)] py-3 sm:py-6 space-y-4">
         {error && (
           <div className="px-4 py-2.5 rounded-md border border-red-900 bg-red-950/40 text-red-300 text-sm flex items-start justify-between gap-4">
             <span className="break-all">{error}</span>
