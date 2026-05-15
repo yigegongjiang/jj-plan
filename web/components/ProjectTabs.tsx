@@ -12,7 +12,6 @@ interface Props {
   taskCount: number;
   asks: ReactNode;
   plans: ReactNode;
-  scrollHidden?: boolean;
 }
 
 export default function ProjectTabs({
@@ -21,7 +20,6 @@ export default function ProjectTabs({
   taskCount,
   asks,
   plans,
-  scrollHidden = false,
 }: Props) {
   const [tab, setTab] = useState<Tab>(DEFAULT_TAB);
   const [hydrated, setHydrated] = useState(false);
@@ -42,12 +40,7 @@ export default function ProjectTabs({
     <div className="flex flex-col">
       <div
         role="tablist"
-        className={
-          'sticky top-[calc(3rem+env(safe-area-inset-top))] sm:top-[calc(3.5rem+env(safe-area-inset-top))] z-10 -mx-3 sm:-mx-4 px-3 sm:px-4 flex items-center gap-4 sm:gap-6 border-b border-zinc-800 bg-zinc-950 sm:bg-zinc-950/90 sm:backdrop-blur transition-transform duration-200 ease-out ' +
-          (scrollHidden
-            ? '-translate-y-full sm:translate-y-0'
-            : 'translate-y-0')
-        }
+        className="sticky top-[env(safe-area-inset-top)] z-10 -mx-3 sm:-mx-4 px-3 sm:px-4 flex items-center gap-4 sm:gap-6 border-b border-zinc-800 bg-zinc-950/80 backdrop-blur"
       >
         <TabButton
           active={tab === 'plans'}

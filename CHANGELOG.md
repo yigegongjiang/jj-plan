@@ -2,6 +2,18 @@
 
 本文件记录 jjplan 的版本变更, 格式参考 [Keep a Changelog](https://keepachangelog.com).
 
+## [0.8.11] - 2026-05-16
+
+### Changed
+
+- **iPhone 顶部彻底 immersive (重做 0.8.10)**: 0.8.10 的 fixed header + main margin-top 方案因 `scrollHidden` 触发阈值 (60px) 与 main 顶部 offset (≈ safe + 48 ≈ 92px) 不同步, scroll-down 过渡期会暴露 12~32px body 黑底 (用户感受为 "安全区域突破不上去"); 且 mobile header 不透明 (`bg-zinc-950`) 完全遮挡 status bar 下方, scrollY < 92 时 main 内容无法进入. 4 处改动 — (1) `Dashboard.tsx` `<header>` 由 `fixed top-0 inset-x-0 z-20 + transform hide` 改为 normal flow (`bg-zinc-950 border-b pt-[env(safe-area-inset-top)]`); header 自然占据 document.y 0..(safe+48), scroll-down 自然滚出 viewport top, scroll-up 到顶部才 reveal — 不再需要 transform 模拟 hide; (2) `Dashboard.tsx` `<main>` 移除 `mt-[calc(env(safe-area-inset-top)+3rem)] sm:mt-[calc(env(safe-area-inset-top)+3.5rem)]`, 紧贴 header 下方, 任意 scroll 都让 main 内容立即覆盖 viewport top (status bar 下方); (3) `ProjectTabs.tsx` tablist sticky `top-[calc(3rem+env(safe-area-inset-top))] sm:top-[calc(3.5rem+env(safe-area-inset-top))]` 改为 `top-[env(safe-area-inset-top)]` 紧贴 status bar 下沿, mobile + desktop 统一 `bg-zinc-950/80 backdrop-blur` (因 translate-y-full 已移除, sticky+blur 不再触发 0.8.9 的 iOS jitter); 移除 `scrollHidden` prop / `transition-transform` / `-translate-y-full` — tab bar 始终 sticky 可见 (任意 scroll 位置都可切换 tab); (4) `Dashboard.tsx` 移除 `useScrollDirection` import 和 `scrollHidden` 状态、移除 `<ProjectTabs scrollHidden={…}>` 传参. `lib/useScrollDirection.ts` 文件保留 (无 import, dead code, 不影响 build; 后续清理另开 task).
+
+### Notes
+
+- 零 BREAKING. CLI / Worker / Schema / API 零变化.
+- 行为变化: scroll-up 不再立即 reveal breadcrumb header, 用户须 scroll 到顶部才看到 — 换来真正的 immersive (顶部内容直达 status bar 下方). tab bar 仍然 sticky 紧贴 status bar 下方, 切换 tab 不需要回顶.
+- 桌面端: header 也变 normal flow (原 fixed), 视觉差异 = scroll-down 时 header 跟随滚走 (原为始终 visible). 桌面长内容场景下 breadcrumb 不再永驻顶部, 与 mobile 行为统一.
+
 ## [0.8.10] - 2026-05-15
 
 ### Changed
