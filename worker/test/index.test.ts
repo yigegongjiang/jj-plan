@@ -60,14 +60,24 @@ interface SpecWithTasks extends Spec {
 interface ProjectWithSpecs extends Project {
   specs: SpecWithTasks[];
 }
+interface Ask {
+  id: string;
+  project_id: string;
+  body: string;
+  origin: string;
+  prev_id: string | null;
+  created_at: number;
+  updated_at: number;
+}
 
 const ctx = {} as ExecutionContext;
 
 beforeEach(async () => {
-  // tasks → specs → projects (FK CASCADE order). DELETE FROM projects alone
-  // would cascade specs and tasks too; we wipe all three for clarity.
+  // tasks → specs → asks → projects (FK CASCADE order). DELETE FROM projects
+  // alone would cascade everything; we wipe each table for clarity.
   await env.DB.exec('DELETE FROM tasks');
   await env.DB.exec('DELETE FROM specs');
+  await env.DB.exec('DELETE FROM asks');
   await env.DB.exec('DELETE FROM projects');
 });
 
@@ -154,9 +164,29 @@ async function getSpec(id: string): Promise<SpecWithTasks> {
   return r.json();
 }
 
-async function rowCount(table: 'projects' | 'specs' | 'tasks'): Promise<number> {
+async function rowCount(table: 'projects' | 'specs' | 'tasks' | 'asks'): Promise<number> {
   const row = await env.DB.prepare(`SELECT COUNT(*) AS c FROM ${table}`).first<{ c: number }>();
   return row?.c ?? 0;
+}
+
+async function newAsk(
+  payload: { body: string; origin?: string; prev_id?: string | null },
+  project: string = PROJECT,
+): Promise<Ask> {
+  const r = await jsonReq(`/projects/${project}/asks`, 'POST', payload);
+  if (r.status !== 201) {
+    throw new Error(`newAsk failed: ${r.status} ${await r.text()}`);
+  }
+  return r.json();
+}
+
+async function listAsks(project: string = PROJECT, limit?: number): Promise<Ask[]> {
+  const q = limit === undefined ? '' : `?limit=${limit}`;
+  const r = await authed(`/projects/${project}/asks${q}`);
+  if (r.status !== 200) {
+    throw new Error(`listAsks failed: ${r.status} ${await r.text()}`);
+  }
+  return r.json();
 }
 
 // Date.now() resolution is 1 ms. Two consecutive inserts can land in the same
@@ -225,6 +255,11 @@ describe('auth', () => {
     { method: 'POST', path: '/specs/anything/tasks', hasBody: true },
     { method: 'PATCH', path: '/tasks/anything', hasBody: true },
     { method: 'DELETE', path: '/tasks/anything', hasBody: false },
+    { method: 'GET', path: '/projects/anything/asks', hasBody: false },
+    { method: 'POST', path: '/projects/anything/asks', hasBody: true },
+    { method: 'GET', path: '/asks/anything', hasBody: false },
+    { method: 'PATCH', path: '/asks/anything', hasBody: true },
+    { method: 'DELETE', path: '/asks/anything', hasBody: false },
   ] as const;
 
   for (const { method, path, hasBody } of cases) {
@@ -1639,5 +1674,237 @@ describe('updated_at cascade and ordering', () => {
     await jsonReq(`/specs/${a1.id}`, 'PATCH', { title: 'A1*' });
     expect((await listSpecs()).map((s) => s.title)).toEqual(['A1*', 'A2', 'B1']);
     void b1;
+  });
+});
+
+// =============================================================================
+// asks — independent of specs/tasks, mirrors specs' chain shape
+// =============================================================================
+
+describe('POST /projects/:name/asks validation', () => {
+  it('rejects missing body', async () => {
+    const r = await jsonReq(`/projects/${PROJECT}/asks`, 'POST', {});
+    expect(r.status).toBe(400);
+    expect((await r.json()).error).toBe('body required');
+  });
+
+  it('rejects empty body', async () => {
+    const r = await jsonReq(`/projects/${PROJECT}/asks`, 'POST', { body: '' });
+    expect(r.status).toBe(400);
+    expect((await r.json()).error).toBe('body required');
+  });
+
+  it('rejects non-string body', async () => {
+    const r = await jsonReq(`/projects/${PROJECT}/asks`, 'POST', { body: 123 });
+    expect(r.status).toBe(400);
+  });
+
+  it('accepts body at boundary length 65536', async () => {
+    const a = await newAsk({ body: 'x'.repeat(65536) });
+    expect(a.body.length).toBe(65536);
+  });
+
+  it('rejects body at length 65537', async () => {
+    const r = await jsonReq(`/projects/${PROJECT}/asks`, 'POST', { body: 'x'.repeat(65537) });
+    expect(r.status).toBe(400);
+    expect((await r.json()).error).toMatch(/body too long/);
+  });
+
+  it('treats missing origin as empty string', async () => {
+    const a = await newAsk({ body: 'b' });
+    expect(a.origin).toBe('');
+  });
+
+  it('accepts origin at boundary length 65536', async () => {
+    const a = await newAsk({ body: 'b', origin: 'o'.repeat(65536) });
+    expect(a.origin.length).toBe(65536);
+  });
+
+  it('rejects origin at length 65537', async () => {
+    const r = await jsonReq(`/projects/${PROJECT}/asks`, 'POST', {
+      body: 'b',
+      origin: 'o'.repeat(65537),
+    });
+    expect(r.status).toBe(400);
+    expect((await r.json()).error).toMatch(/origin too long/);
+  });
+
+  it('rejects non-string origin', async () => {
+    const r = await jsonReq(`/projects/${PROJECT}/asks`, 'POST', { body: 'b', origin: 42 });
+    expect(r.status).toBe(400);
+    expect((await r.json()).error).toMatch(/origin must be string/);
+  });
+
+  it('upserts the project on first ask', async () => {
+    expect(await rowCount('projects')).toBe(0);
+    await newAsk({ body: 'hello' }, 'fresh-project');
+    expect(await rowCount('projects')).toBe(1);
+  });
+
+  it('rejects malformed JSON body', async () => {
+    const r = await authed(`/projects/${PROJECT}/asks`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: '{not json',
+    });
+    expect(r.status).toBe(400);
+  });
+
+  it('rejects project name over 128 chars', async () => {
+    const long = 'p'.repeat(129);
+    const r = await jsonReq(`/projects/${long}/asks`, 'POST', { body: 'b' });
+    expect(r.status).toBe(400);
+  });
+});
+
+describe('GET /projects/:name/asks', () => {
+  it('404 when project unknown', async () => {
+    const r = await authed(`/projects/no-such/asks`);
+    expect(r.status).toBe(404);
+  });
+
+  it('default limit returns up to 3 most recent', async () => {
+    for (const ch of ['a', 'b', 'c', 'd', 'e']) {
+      await newAsk({ body: ch });
+      await tick();
+    }
+    const list = await listAsks();
+    expect(list.length).toBe(3);
+    expect(list.map((x) => x.body)).toEqual(['e', 'd', 'c']);
+  });
+
+  it('explicit limit honored', async () => {
+    for (const ch of ['a', 'b', 'c', 'd']) {
+      await newAsk({ body: ch });
+      await tick();
+    }
+    expect((await listAsks(PROJECT, 1)).map((x) => x.body)).toEqual(['d']);
+    expect((await listAsks(PROJECT, 4)).map((x) => x.body)).toEqual(['d', 'c', 'b', 'a']);
+  });
+
+  it('rejects limit out of range', async () => {
+    await newAsk({ body: 'x' });
+    expect((await authed(`/projects/${PROJECT}/asks?limit=0`)).status).toBe(400);
+    expect((await authed(`/projects/${PROJECT}/asks?limit=101`)).status).toBe(400);
+    expect((await authed(`/projects/${PROJECT}/asks?limit=foo`)).status).toBe(400);
+  });
+});
+
+describe('asks chain', () => {
+  it('prev_id pointing to nonexistent ask is rejected', async () => {
+    await newAsk({ body: 'seed' });
+    const r = await jsonReq(`/projects/${PROJECT}/asks`, 'POST', {
+      body: 'x',
+      prev_id: FAKE_ID,
+    });
+    expect(r.status).toBe(400);
+    expect((await r.json()).error).toMatch(/prev_id ask not found/);
+  });
+
+  it('prev_id from another project is rejected', async () => {
+    const a = await newAsk({ body: 'a' }, 'P1');
+    const r = await jsonReq(`/projects/P2/asks`, 'POST', { body: 'b', prev_id: a.id });
+    expect(r.status).toBe(400);
+    expect((await r.json()).error).toMatch(/same project/);
+  });
+
+  it('second successor of the same prev_id returns 409', async () => {
+    const a = await newAsk({ body: 'a' });
+    await newAsk({ body: 'b', prev_id: a.id });
+    const r = await jsonReq(`/projects/${PROJECT}/asks`, 'POST', { body: 'c', prev_id: a.id });
+    expect(r.status).toBe(409);
+  });
+
+  it('GET /asks/:id 404 on missing', async () => {
+    const r = await authed(`/asks/${FAKE_ID}`);
+    expect(r.status).toBe(404);
+  });
+
+  it('PATCH /asks/:id changes body only', async () => {
+    const a = await newAsk({ body: 'old', origin: 'kept' });
+    await tick();
+    const r = await jsonReq(`/asks/${a.id}`, 'PATCH', { body: 'new' });
+    expect(r.status).toBe(200);
+    const updated = await r.json();
+    expect(updated.body).toBe('new');
+    expect(updated.origin).toBe('kept'); // immutable
+    expect(updated.updated_at).toBeGreaterThan(a.updated_at);
+  });
+
+  it('PATCH ignores unknown fields and rejects missing body', async () => {
+    const a = await newAsk({ body: 'old', origin: 'kept' });
+    const r1 = await jsonReq(`/asks/${a.id}`, 'PATCH', { origin: 'hack' });
+    expect(r1.status).toBe(400);
+    const r2 = await jsonReq(`/asks/${a.id}`, 'PATCH', {});
+    expect(r2.status).toBe(400);
+  });
+
+  it('PATCH /asks/:id 404 on missing id', async () => {
+    const r = await jsonReq(`/asks/${FAKE_ID}`, 'PATCH', { body: 'x' });
+    expect(r.status).toBe(404);
+  });
+
+  it('PATCH bumps parent project.updated_at', async () => {
+    const a = await newAsk({ body: 'old' });
+    const projBefore = (await listProjects()).find((p) => p.name === PROJECT)!;
+    await tick();
+    await jsonReq(`/asks/${a.id}`, 'PATCH', { body: 'new' });
+    const projAfter = (await listProjects()).find((p) => p.name === PROJECT)!;
+    expect(projAfter.updated_at).toBeGreaterThan(projBefore.updated_at);
+  });
+
+  it('DELETE head rewires successor to standalone', async () => {
+    const a = await newAsk({ body: 'A' });
+    await tick();
+    const b = await newAsk({ body: 'B', prev_id: a.id });
+    const r = await authed(`/asks/${a.id}`, { method: 'DELETE' });
+    expect(r.status).toBe(204);
+    const updated = await (await authed(`/asks/${b.id}`)).json();
+    expect(updated.prev_id).toBeNull();
+  });
+
+  it('DELETE middle rewires successor onto predecessor', async () => {
+    const a = await newAsk({ body: 'A' });
+    await tick();
+    const b = await newAsk({ body: 'B', prev_id: a.id });
+    await tick();
+    const c = await newAsk({ body: 'C', prev_id: b.id });
+    const r = await authed(`/asks/${b.id}`, { method: 'DELETE' });
+    expect(r.status).toBe(204);
+    const updated = await (await authed(`/asks/${c.id}`)).json();
+    expect(updated.prev_id).toBe(a.id);
+  });
+
+  it('DELETE 404 on missing id', async () => {
+    const r = await authed(`/asks/${FAKE_ID}`, { method: 'DELETE' });
+    expect(r.status).toBe(404);
+  });
+});
+
+describe('asks cascade', () => {
+  it('DELETE /projects/:name cascades to asks', async () => {
+    await newAsk({ body: 'a' }, 'P1');
+    await newAsk({ body: 'b' }, 'P1');
+    expect(await rowCount('asks')).toBe(2);
+    const r = await authed(`/projects/P1`, { method: 'DELETE' });
+    expect(r.status).toBe(204);
+    expect(await rowCount('asks')).toBe(0);
+  });
+
+  it('newAsk bumps parent project.updated_at', async () => {
+    await newAsk({ body: 'seed' }, 'P1');
+    const before = (await listProjects()).find((p) => p.name === 'P1')!;
+    await tick();
+    await newAsk({ body: 'next' }, 'P1');
+    const after = (await listProjects()).find((p) => p.name === 'P1')!;
+    expect(after.updated_at).toBeGreaterThan(before.updated_at);
+  });
+
+  it('asks are independent of specs (spec delete does not touch asks)', async () => {
+    const s = await newSpec({ title: 's' });
+    await newAsk({ body: 'a' });
+    expect(await rowCount('asks')).toBe(1);
+    await authed(`/specs/${s.id}`, { method: 'DELETE' });
+    expect(await rowCount('asks')).toBe(1);
   });
 });

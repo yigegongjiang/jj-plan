@@ -4,14 +4,18 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { ApiError, api } from '@/lib/api';
 import {
+  ASK_LIMIT_MAX,
   SPEC_STATUSES,
   TASK_STATUSES,
+  type Ask,
   type Project,
   type Spec,
   type SpecStatus,
   type Task,
   type TaskStatus,
 } from '@/lib/types';
+import AskEditDialog from './AskEditDialog';
+import AsksView from './AsksView';
 import ConfirmDialog from './ConfirmDialog';
 import EditDialog, { type EditDraft } from './EditDialog';
 import ProjectsList from './ProjectsList';
@@ -22,12 +26,14 @@ const STORAGE_KEY = 'jjplan_token';
 
 type EditTarget =
   | { kind: 'spec'; spec: Spec }
-  | { kind: 'task'; task: Task };
+  | { kind: 'task'; task: Task }
+  | { kind: 'ask'; ask: Ask };
 
 type DeleteTarget =
   | { kind: 'project'; name: string; specCount: number; taskCount: number }
   | { kind: 'spec'; id: string; title: string; taskCount: number }
-  | { kind: 'task'; id: string; title: string };
+  | { kind: 'task'; id: string; title: string }
+  | { kind: 'ask'; id: string };
 
 interface RouteHome {
   kind: 'home';
@@ -74,6 +80,9 @@ export default function Dashboard() {
   const [del, setDel] = useState<DeleteTarget | null>(null);
   const [busy, setBusy] = useState(false);
   const [route, setRoute] = useState<Route>({ kind: 'home' });
+  // Asks lazy-loaded per active project; reset on navigation to avoid stale flashes.
+  const [asks, setAsks] = useState<Ask[] | null>(null);
+  const [asksProject, setAsksProject] = useState<string | null>(null);
 
   // Hydrate from localStorage + URL once on mount.
   useEffect(() => {
@@ -95,6 +104,8 @@ export default function Dashboard() {
   }, []);
 
   // 401 falls back to login screen so a stale token isn't used silently.
+  // Also wipes asks cache so a re-login under the same URL refetches instead
+  // of showing the previous session's data until the next 5s tick.
   const fallbackToLogin = useCallback(() => {
     if (typeof window !== 'undefined') {
       window.localStorage.removeItem(STORAGE_KEY);
@@ -104,6 +115,8 @@ export default function Dashboard() {
     setProjects(null);
     setEdit(null);
     setDel(null);
+    setAsks(null);
+    setAsksProject(null);
   }, []);
 
   // silent=true: background auto-refresh path. Skip the loading/error UI so a
@@ -140,6 +153,43 @@ export default function Dashboard() {
     if (token) void load(token);
   }, [token, load]);
 
+  // Silent fetch; routes share the projects-list 5s tick.
+  const loadAsks = useCallback(
+    async (t: string, project: string) => {
+      try {
+        const data = await api.listAsks(t, project, ASK_LIMIT_MAX);
+        setAsks(data);
+        setAsksProject(project);
+      } catch (e) {
+        const err = e as ApiError;
+        if (err.status === 401) {
+          fallbackToLogin();
+        } else if (err.status === 404) {
+          setAsks([]);
+          setAsksProject(project);
+        } else {
+          console.warn('[asks-load]', err);
+        }
+      }
+    },
+    [fallbackToLogin],
+  );
+
+  // asksProject gate prevents refetch when bouncing project ↔ spec routes.
+  useEffect(() => {
+    if (!token) return;
+    if (route.kind === 'home') {
+      setAsks(null);
+      setAsksProject(null);
+      return;
+    }
+    const project = route.project;
+    if (asksProject !== project) {
+      setAsks(null);
+      void loadAsks(token, project);
+    }
+  }, [token, route, asksProject, loadAsks]);
+
   // Auto-refresh every 5s while logged in so AI-side CLI changes show up
   // without a manual reload. Skips ticks when the tab is hidden, then fires
   // immediately on visibilitychange→visible so a returning user sees fresh
@@ -148,7 +198,11 @@ export default function Dashboard() {
     if (!token) return;
     if (typeof document === 'undefined') return;
     const tick = () => {
-      if (document.visibilityState === 'visible') void load(token, true);
+      if (document.visibilityState !== 'visible') return;
+      void load(token, true);
+      if (route.kind !== 'home') {
+        void loadAsks(token, route.project);
+      }
     };
     const intervalId = window.setInterval(tick, 5000);
     document.addEventListener('visibilitychange', tick);
@@ -156,7 +210,7 @@ export default function Dashboard() {
       window.clearInterval(intervalId);
       document.removeEventListener('visibilitychange', tick);
     };
-  }, [token, load]);
+  }, [token, load, route, loadAsks]);
 
   function login() {
     setLoginError(null);
@@ -213,7 +267,7 @@ export default function Dashboard() {
                 ),
               })),
         );
-      } else {
+      } else if (edit.kind === 'task') {
         const patch: { title?: string; body?: string; status?: TaskStatus } = {};
         if (draft.title !== undefined) patch.title = draft.title;
         if (draft.body !== undefined) patch.body = draft.body;
@@ -233,6 +287,28 @@ export default function Dashboard() {
               })),
         );
       }
+      setEdit(null);
+    } catch (e) {
+      const err = e as ApiError;
+      if (err.status === 401) {
+        fallbackToLogin();
+      } else {
+        setEditError(err.message);
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveAskEdit(newBody: string) {
+    if (!edit || edit.kind !== 'ask') return;
+    setBusy(true);
+    setEditError(null);
+    try {
+      const updated = await api.patchAsk(token, edit.ask.id, { body: newBody });
+      setAsks((prev) =>
+        prev === null ? prev : prev.map((a) => (a.id === updated.id ? updated : a)),
+      );
       setEdit(null);
     } catch (e) {
       const err = e as ApiError;
@@ -268,7 +344,7 @@ export default function Dashboard() {
                 specs: p.specs.filter((s) => s.id !== id),
               })),
         );
-      } else {
+      } else if (del.kind === 'task') {
         const id = del.id;
         await api.deleteTask(token, id);
         setProjects((prev) =>
@@ -282,6 +358,10 @@ export default function Dashboard() {
                 })),
               })),
         );
+      } else {
+        const id = del.id;
+        await api.deleteAsk(token, id);
+        setAsks((prev) => (prev === null ? prev : prev.filter((a) => a.id !== id)));
       }
       setDel(null);
     } catch (e) {
@@ -335,7 +415,7 @@ export default function Dashboard() {
             )}
           </div>
           <p className="mt-8 text-xs text-zinc-400 text-center leading-relaxed">
-            创建 spec / task 请使用 jjplan CLI;
+            创建 plan / task / ask 请使用 jjplan / jjask CLI;
             <br />
             此处仅查看与编辑。
           </p>
@@ -391,28 +471,38 @@ export default function Dashboard() {
             }}
           />
         ) : route.kind === 'project' && activeProject ? (
-          <SpecsView
-            project={activeProject}
-            onOpenSpec={(specId) =>
-              navigate({
-                kind: 'spec',
-                project: activeProject.name,
-                specId,
-              })
-            }
-            onEditSpec={(spec) => {
-              setEditError(null);
-              setEdit({ kind: 'spec', spec });
-            }}
-            onDeleteSpec={(spec) =>
-              setDel({
-                kind: 'spec',
-                id: spec.id,
-                title: spec.title,
-                taskCount: spec.tasks.length,
-              })
-            }
-          />
+          <div className="space-y-6">
+            <AsksView
+              asks={asksProject === activeProject.name ? asks : null}
+              onEdit={(ask) => {
+                setEditError(null);
+                setEdit({ kind: 'ask', ask });
+              }}
+              onDelete={(ask) => setDel({ kind: 'ask', id: ask.id })}
+            />
+            <SpecsView
+              project={activeProject}
+              onOpenSpec={(specId) =>
+                navigate({
+                  kind: 'spec',
+                  project: activeProject.name,
+                  specId,
+                })
+              }
+              onEditSpec={(spec) => {
+                setEditError(null);
+                setEdit({ kind: 'spec', spec });
+              }}
+              onDeleteSpec={(spec) =>
+                setDel({
+                  kind: 'spec',
+                  id: spec.id,
+                  title: spec.title,
+                  taskCount: spec.tasks.length,
+                })
+              }
+            />
+          </div>
         ) : route.kind === 'spec' && activeSpec ? (
           <SpecDetail
             spec={activeSpec}
@@ -441,7 +531,21 @@ export default function Dashboard() {
         )}
       </main>
 
-      {edit && (
+      {edit && edit.kind === 'ask' && (
+        <AskEditDialog
+          ask={edit.ask}
+          busy={busy}
+          errorMessage={editError}
+          onSave={saveAskEdit}
+          onCancel={() => {
+            if (!busy) {
+              setEdit(null);
+              setEditError(null);
+            }
+          }}
+        />
+      )}
+      {edit && edit.kind !== 'ask' && (
         <EditDialog
           target={
             edit.kind === 'spec'
@@ -480,12 +584,14 @@ export default function Dashboard() {
             del.kind === 'project'
               ? `删除 project「${del.name}」?`
               : del.kind === 'spec'
-                ? `删除 spec「${del.title}」?`
-                : `删除 task「${del.title}」?`
+                ? `删除 plan「${del.title}」?`
+                : del.kind === 'task'
+                  ? `删除 task「${del.title}」?`
+                  : `删除 ask「${del.id}」?`
           }
           message={
             del.kind === 'project'
-              ? `连同 ${del.specCount} 个 spec 与 ${del.taskCount} 个 task 一并删除,无法恢复。`
+              ? `连同 ${del.specCount} 个 plan, ${del.taskCount} 个 task, 以及该项目下全部 ask 一并删除,无法恢复。`
               : del.kind === 'spec'
                 ? `连同 ${del.taskCount} 个 task 一并删除,无法恢复。`
                 : '此操作无法恢复。'

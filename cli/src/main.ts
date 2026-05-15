@@ -1,20 +1,6 @@
-/**
- * jjplan CLI — thin HTTP client for the jjplan Worker.
- *
- * Responsibilities (kept deliberately narrow):
- *   1. Read ~/.jjplan/config.json for {endpoint, token}.
- *   2. Translate `jjplan <noun> <verb> ...` into one HTTP call.
- *   3. Print the JSON response to stdout.
- *   4. On any error, write a one-line message to stderr and exit non-zero.
- *
- * Project scoping: spec.new / spec.ls take a `<project>` positional argument
- * supplied by the caller (the AI passes the basename of its working
- * directory). The Worker upserts the project on first sight; the CLI never
- * inspects the local filesystem for it. Spec ids are ULIDs and globally
- * unique, so spec show/set/rm and all task commands remain project-agnostic.
- *
- * No local state, no caching, no retries. Business logic lives in the Worker.
- */
+// Thin HTTP client for the jjplan Worker. One source, two binaries:
+// build:jjask injects JJPLAN_ENTRY='jjask'; default 'jjplan' so source-tree
+// `bun run src/main.ts` works. No local state, no retries.
 import { parseArgs } from 'node:util';
 import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
@@ -22,10 +8,14 @@ import { join } from 'node:path';
 import { execSync } from 'node:child_process';
 
 declare const JJPLAN_VERSION: string | undefined;
+declare const JJPLAN_ENTRY: string | undefined;
 
 const CONFIG_PATH = join(homedir(), '.jjplan', 'config.json');
 const INSTALL_URL =
   'https://raw.githubusercontent.com/yigegongjiang/jj-plan/main/install.sh';
+
+const ENTRY_NAME: 'jjplan' | 'jjask' =
+  typeof JJPLAN_ENTRY === 'string' && JJPLAN_ENTRY === 'jjask' ? 'jjask' : 'jjplan';
 
 const SPEC_STATUSES = ['active', 'done'] as const;
 const TASK_STATUSES = ['todo', 'doing', 'done', 'blocked'] as const;
@@ -33,11 +23,14 @@ const MAX_TITLE_LEN = 200;
 const MAX_BODY_LEN = 65536;
 const MAX_PROJECT_NAME_LEN = 128;
 
+const ASK_LIMIT_DEFAULT = 3;
+const ASK_LIMIT_MAX = 100;
+
 const USAGE = {
-  help: 'jjplan --help',
-  version: 'jjplan --version',
-  'self-update': 'jjplan self-update',
-  uninstall: 'jjplan uninstall',
+  help: `${ENTRY_NAME} --help`,
+  version: `${ENTRY_NAME} --version`,
+  'self-update': `${ENTRY_NAME} self-update`,
+  uninstall: `${ENTRY_NAME} uninstall`,
   'project.ls': 'jjplan project ls',
   'project.rm': 'jjplan project rm <name>',
   'spec.new': 'jjplan spec new <project> <title> [--after <prev_spec_id>]',
@@ -49,6 +42,11 @@ const USAGE = {
   'task.ls': 'jjplan task ls <spec_id>',
   'task.set': `jjplan task set <id> [--title T] [--body B] [--status ${TASK_STATUSES.join('|')}]`,
   'task.rm': 'jjplan task rm <id>',
+  'ask.new': 'jjask new <project> <body> [--origin <body>] [--after <prev_ask_id>]',
+  'ask.ls': `jjask ls <project> [--limit N]   (default ${ASK_LIMIT_DEFAULT}, max ${ASK_LIMIT_MAX})`,
+  'ask.show': 'jjask show <id>',
+  'ask.set': 'jjask set <id> --body <body>',
+  'ask.rm': 'jjask rm <id>',
 } as const;
 
 type UsageKey = keyof typeof USAGE;
@@ -78,7 +76,7 @@ const VERSION = resolveVersion();
 // ─── error helper ──────────────────────────────────────────────────────────
 
 function die(message: string): never {
-  process.stderr.write(`jjplan: ${message.replace(/\s+/g, ' ').trim()}\n`);
+  process.stderr.write(`${ENTRY_NAME}: ${message.replace(/\s+/g, ' ').trim()}\n`);
   process.exit(1);
 }
 
@@ -249,6 +247,118 @@ function parseSpecNewArgs(args: string[]): { project: string; title: string; pre
   return prevId ? { project, title, prevId } : { project, title };
 }
 
+function parseAskNewArgs(args: string[]): {
+  project: string;
+  body: string;
+  origin?: string;
+  prevId?: string;
+} {
+  let project: string | undefined;
+  let body: string | undefined;
+  let origin: string | undefined;
+  let prevId: string | undefined;
+
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (arg === undefined) continue;
+    if (arg === '--after') {
+      if (prevId !== undefined) dieUsage('ask.new', 'duplicate --after');
+      prevId = args[++i];
+      if (typeof prevId !== 'string' || prevId.length === 0 || prevId.startsWith('--')) {
+        dieUsage('ask.new', 'missing <prev_ask_id> after --after');
+      }
+    } else if (arg === '--origin') {
+      if (origin !== undefined) dieUsage('ask.new', 'duplicate --origin');
+      const v = args[++i];
+      if (typeof v !== 'string') dieUsage('ask.new', 'missing <body> after --origin');
+      origin = v;
+    } else if (arg.startsWith('--')) {
+      dieUsage('ask.new', `unknown option ${arg}`);
+    } else if (project === undefined) {
+      project = arg;
+    } else if (body === undefined) {
+      body = arg;
+    } else {
+      dieUsage('ask.new', `unexpected argument ${arg}`);
+    }
+  }
+
+  if (project === undefined) dieUsage('ask.new', 'missing <project>');
+  if (body === undefined) dieUsage('ask.new', 'missing <body>');
+  validateProject(project);
+  if (body.length === 0 || body.length > MAX_BODY_LEN) {
+    dieUsage('ask.new', `body length must be 1..${MAX_BODY_LEN}`);
+  }
+  if (origin !== undefined && origin.length > MAX_BODY_LEN) {
+    dieUsage('ask.new', `origin too long (max ${MAX_BODY_LEN} chars)`);
+  }
+  const out: { project: string; body: string; origin?: string; prevId?: string } = { project, body };
+  if (origin !== undefined) out.origin = origin;
+  if (prevId !== undefined) out.prevId = prevId;
+  return out;
+}
+
+function parseAskLsArgs(args: string[]): { project: string; limit?: number } {
+  let project: string | undefined;
+  let limit: number | undefined;
+
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (arg === undefined) continue;
+    if (arg === '--limit') {
+      if (limit !== undefined) dieUsage('ask.ls', 'duplicate --limit');
+      const v = args[++i];
+      if (typeof v !== 'string' || v.startsWith('--')) {
+        dieUsage('ask.ls', 'missing <N> after --limit');
+      }
+      const n = Number(v);
+      if (!Number.isInteger(n) || n < 1 || n > ASK_LIMIT_MAX) {
+        dieUsage('ask.ls', `--limit must be integer in 1..${ASK_LIMIT_MAX}`);
+      }
+      limit = n;
+    } else if (arg.startsWith('--')) {
+      dieUsage('ask.ls', `unknown option ${arg}`);
+    } else if (project === undefined) {
+      project = arg;
+    } else {
+      dieUsage('ask.ls', `unexpected argument ${arg}`);
+    }
+  }
+
+  if (project === undefined) dieUsage('ask.ls', 'missing <project>');
+  validateProject(project);
+  return limit !== undefined ? { project, limit } : { project };
+}
+
+function parseAskSetArgs(args: string[]): { id: string; body: string } {
+  let id: string | undefined;
+  let body: string | undefined;
+
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (arg === undefined) continue;
+    if (arg === '--body') {
+      if (body !== undefined) dieUsage('ask.set', 'duplicate --body');
+      const v = args[++i];
+      if (typeof v !== 'string') dieUsage('ask.set', 'missing <body> after --body');
+      body = v;
+    } else if (arg.startsWith('--')) {
+      dieUsage('ask.set', `unknown option ${arg}`);
+    } else if (id === undefined) {
+      id = arg;
+    } else {
+      dieUsage('ask.set', `unexpected argument ${arg}`);
+    }
+  }
+
+  if (id === undefined) dieUsage('ask.set', 'missing <id>');
+  if (body === undefined) dieUsage('ask.set', 'missing --body');
+  if (body.length === 0 || body.length > MAX_BODY_LEN) {
+    dieUsage('ask.set', `body length must be 1..${MAX_BODY_LEN}`);
+  }
+  return { id, body };
+}
+
 function parseTaskNewArgs(args: string[]): { specId: string; title: string; prevId?: string } {
   let specId: string | undefined;
   let title: string | undefined;
@@ -369,6 +479,35 @@ const commands: Record<string, Handler> = {
     id = requireId(id, rest, 'task.rm');
     await api('DELETE', `/tasks/${encodeURIComponent(id)}`);
   },
+
+  async 'ask.new'(args) {
+    const { project, body, origin, prevId } = parseAskNewArgs(args);
+    const payload: { body: string; origin?: string; prev_id?: string } = { body };
+    if (origin !== undefined) payload.origin = origin;
+    if (prevId) payload.prev_id = prevId;
+    print(await api('POST', `/projects/${encodeURIComponent(project)}/asks`, payload));
+  },
+
+  async 'ask.ls'(args) {
+    const { project, limit } = parseAskLsArgs(args);
+    const q = limit !== undefined ? `?limit=${limit}` : '';
+    print(await api('GET', `/projects/${encodeURIComponent(project)}/asks${q}`));
+  },
+
+  async 'ask.show'([id, ...rest]) {
+    id = requireId(id, rest, 'ask.show');
+    print(await api('GET', `/asks/${encodeURIComponent(id)}`));
+  },
+
+  async 'ask.set'(args) {
+    const { id, body } = parseAskSetArgs(args);
+    print(await api('PATCH', `/asks/${encodeURIComponent(id)}`, { body }));
+  },
+
+  async 'ask.rm'([id, ...rest]) {
+    id = requireId(id, rest, 'ask.rm');
+    await api('DELETE', `/asks/${encodeURIComponent(id)}`);
+  },
 };
 
 // ─── self-update / help / version ─────────────────────────────────────────
@@ -383,11 +522,30 @@ function runInstaller(args: string[]): void {
 }
 
 function printHelp(): void {
+  if (ENTRY_NAME === 'jjask') {
+    printJjaskHelp();
+    return;
+  }
+  printJjplanHelp();
+}
+
+function printJjplanHelp(): void {
   process.stdout.write(
     `jjplan ${VERSION}
 
+# TLDR
+jjplan: AI 用的 Spec/Task 跟踪 CLI. 三层模型 project -> spec -> task, id=ULID.
+循环: 写 spec 立计划 -> 拆 task -> 推 task status (todo/doing/done/blocked) -> 所有 task done 后 spec set done.
+
+  jjplan spec new <project> <title>     # body 从 stdin 读; project 不存在自动建
+  jjplan task new <spec_id> <title>     # body 从 stdin 读; 默认追加链尾, --after <id> 中间插
+  jjplan task set <id> --status <s>     # 亦可改 --title/--body
+  jjplan spec set <id> --status done    # 收尾, 需所有 task 已 done
+
+输出: stdout 单行 JSON. 查询/删除/错误码/链语义见 jjplan --help.
+
 # PURPOSE
-为 AI 设计的 Spec/Task 跟踪 CLI. 循环: 写 SPEC -> 拆 TASK -> 推 task status -> spec done.
+为 AI 设计的 Spec/Task 跟踪 CLI.
 
 # MODEL
 project (name, 主键) -- spec (id=ULID) -- task (id=ULID)
@@ -459,6 +617,56 @@ blocked: 切入时原因写 body, 解除后回 todo/doing.
   );
 }
 
+function printJjaskHelp(): void {
+  process.stdout.write(
+    `jjask ${VERSION}
+
+# TLDR
+jjask: 落盘人类抛给 AI 的请求 (Q&A 记录), 与 jjplan 独立. 两层模型 project -> ask, id=ULID.
+
+  jjask new <project> <body> [--origin <原话>]
+    # body = 给后续 AI 的最终输入. 决策规则:
+    #   - 用户原话已清晰、适合直接喂 AI -> body=原话, 不传 --origin (默认路径)
+    #   - 用户原话含糊/口语化/欠上下文 -> LLM 先改写成精炼版作 body, 把原话放 --origin 留底
+
+输出: stdout 单行 JSON. body/origin 不读 stdin (位置/flag 参数). 查询/修改/删除见 jjask --help.
+
+# PURPOSE
+落盘人类抛给 AI 的请求 (body + 可选 origin 原话). 与 jjplan 独立.
+
+# MODEL
+project (name) -- ask (id=ULID)
+- project 自动 upsert; ask 用 --after 串单链, 防 fork (409).
+- 中间删自动接续: A->B->C 删 B => A->C.
+- project rm 级联删全部 ask.
+
+# I/O
+- 输出: stdout 单行 JSON; DELETE 空 (204). 错误: stderr \`jjask: <msg>\` + 非零 exit.
+- <body> / --origin / --body 全是位置/flag 参数, 不读 stdin (与 jjplan 不同).
+- 限长 (chars): body 1..${MAX_BODY_LEN}, origin 0..${MAX_BODY_LEN}, project 1..${MAX_PROJECT_NAME_LEN}.
+
+# COMMANDS
+
+jjask --help | --version | self-update | uninstall
+
+jjask new <project> <body> [--origin <body>] [--after <prev_ask_id>]
+  -> {id, project_id, body, origin, prev_id, created_at, updated_at}
+  err: 400 prev 跨项目/不存在 | 409 prev 已有后继
+jjask ls <project> [--limit N]   (default ${ASK_LIMIT_DEFAULT}, max ${ASK_LIMIT_MAX}, by updated_at DESC)
+  -> [{...ask}]
+  err: 404
+jjask show <id>
+  -> {...ask}
+  err: 404
+jjask set <id> --body <body>     (origin 一经创建不可改)
+  -> {...ask}
+  err: 400 | 404
+jjask rm <id>
+  err: 404 | 409
+`,
+  );
+}
+
 // ─── entry point ──────────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
@@ -485,7 +693,21 @@ async function main(): Promise<void> {
     return;
   }
 
+  // jjask: `<verb> ...` → `ask.<verb>`. jjplan: `<noun> <verb> ...`.
+  if (ENTRY_NAME === 'jjask') {
+    const [verb, ...rest] = argv;
+    const handler = commands[`ask.${verb}`];
+    if (!handler) {
+      die(`unknown command '${verb}'; usage: ${USAGE.help}`);
+    }
+    await handler(rest);
+    return;
+  }
+
   const [noun, verb, ...rest] = argv;
+  if (noun === 'ask') {
+    die(`'ask' is a jjask command; run 'jjask ${verb ?? '--help'}' instead`);
+  }
   const handler = commands[`${noun}.${verb}`];
   if (!handler) {
     die(`unknown command '${[noun, verb].filter(Boolean).join(' ')}'; usage: ${USAGE.help}`);

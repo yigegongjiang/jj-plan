@@ -2,41 +2,24 @@
 
 import { useEffect, useState } from 'react';
 
-import { MAX_BODY_LEN, MAX_TITLE_LEN } from '@/lib/types';
-
-export interface EditTarget {
-  kind: 'spec' | 'task';
-  id: string;
-  title: string;
-  body: string;
-  status: string;
-  statuses: readonly string[];
-}
-
-export interface EditDraft {
-  title?: string;
-  body?: string;
-  status?: string;
-}
+import { MAX_BODY_LEN, type Ask } from '@/lib/types';
 
 interface Props {
-  target: EditTarget;
+  ask: Ask;
   busy: boolean;
   errorMessage?: string | null;
-  onSave: (draft: EditDraft) => void;
+  onSave: (body: string) => void;
   onCancel: () => void;
 }
 
-export default function EditDialog({
-  target,
+export default function AskEditDialog({
+  ask,
   busy,
   errorMessage,
   onSave,
   onCancel,
 }: Props) {
-  const [title, setTitle] = useState(target.title);
-  const [body, setBody] = useState(target.body);
-  const [status, setStatus] = useState(target.status);
+  const [body, setBody] = useState(ask.body);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -46,26 +29,16 @@ export default function EditDialog({
     return () => document.removeEventListener('keydown', onKey);
   }, [busy, onCancel]);
 
+  const dirty = body !== ask.body;
+  const valid = body.length > 0 && body.length <= MAX_BODY_LEN;
+
   function submit() {
-    const draft: EditDraft = {};
-    if (title !== target.title) draft.title = title;
-    if (body !== target.body) draft.body = body;
-    if (status !== target.status) draft.status = status;
-    if (Object.keys(draft).length === 0) {
+    if (!dirty) {
       onCancel();
       return;
     }
-    onSave(draft);
+    onSave(body);
   }
-
-  const dirty =
-    title !== target.title ||
-    body !== target.body ||
-    status !== target.status;
-  const valid =
-    title.trim().length > 0 &&
-    title.length <= MAX_TITLE_LEN &&
-    body.length <= MAX_BODY_LEN;
 
   return (
     <div
@@ -78,10 +51,10 @@ export default function EditDialog({
         <div className="px-5 py-3 border-b border-zinc-800 flex items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="text-xs text-zinc-500 uppercase tracking-wider">
-              edit {target.kind === 'spec' ? 'plan' : target.kind}
+              edit ask
             </div>
             <div className="text-xs font-mono text-zinc-400 mt-0.5 truncate">
-              {target.id}
+              {ask.id}
             </div>
           </div>
           <button
@@ -94,40 +67,6 @@ export default function EditDialog({
           </button>
         </div>
         <div className="p-5 space-y-4">
-          <label className="block">
-            <div className="flex items-baseline justify-between">
-              <span className="text-xs text-zinc-500 uppercase tracking-wider">
-                title
-              </span>
-              <span className="text-[10px] text-zinc-400 font-mono">
-                {title.length}/{MAX_TITLE_LEN}
-              </span>
-            </div>
-            <input
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              maxLength={MAX_TITLE_LEN}
-              className="mt-1.5 w-full px-3 py-2 rounded-md bg-zinc-900 border border-zinc-800 focus:border-blue-500 focus:outline-none text-sm"
-            />
-          </label>
-
-          <label className="block">
-            <span className="text-xs text-zinc-500 uppercase tracking-wider">
-              status
-            </span>
-            <select
-              value={status}
-              onChange={(e) => setStatus(e.target.value)}
-              className="mt-1.5 w-full px-3 py-2 rounded-md bg-zinc-900 border border-zinc-800 focus:border-blue-500 focus:outline-none text-sm cursor-pointer"
-            >
-              {target.statuses.map((s) => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
-              ))}
-            </select>
-          </label>
-
           <label className="block">
             <div className="flex items-baseline justify-between">
               <span className="text-xs text-zinc-500 uppercase tracking-wider">
@@ -146,6 +85,17 @@ export default function EditDialog({
               spellCheck={false}
             />
           </label>
+
+          {ask.origin.length > 0 && (
+            <div className="block">
+              <div className="text-xs text-zinc-500 uppercase tracking-wider">
+                origin
+              </div>
+              <div className="mt-1.5 w-full px-3 py-2 rounded-md bg-zinc-900/60 border border-zinc-900 text-sm font-mono text-zinc-400 whitespace-pre-wrap break-words max-h-40 overflow-auto">
+                {ask.origin}
+              </div>
+            </div>
+          )}
 
           {errorMessage && (
             <div className="px-3 py-2 rounded-md border border-red-900 bg-red-950/40 text-red-300 text-xs">

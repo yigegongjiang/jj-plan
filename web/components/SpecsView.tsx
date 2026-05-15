@@ -3,7 +3,6 @@
 import { useMemo } from 'react';
 
 import { buildChains } from '@/lib/chain';
-import { fmtTime } from '@/lib/format';
 import type { Project, Spec } from '@/lib/types';
 import ChainGraph from './ChainGraph';
 import StatusBadge from './StatusBadge';
@@ -26,21 +25,21 @@ export default function SpecsView({
   const taskCount = project.specs.reduce((n, s) => n + s.tasks.length, 0);
 
   return (
-    <div className="space-y-5">
+    <section className="space-y-3">
       <div className="flex items-baseline gap-3 flex-wrap">
-        <h2 className="text-xl font-semibold">{project.name}</h2>
-        <span className="text-xs text-zinc-500">
-          {project.specs.length} {project.specs.length === 1 ? 'spec' : 'specs'}{' '}
-          · {taskCount} {taskCount === 1 ? 'task' : 'tasks'}
-        </span>
-        <span className="text-[11px] text-zinc-400 font-mono">
-          updated {fmtTime(project.updated_at)}
+        <h3 className="text-sm font-semibold uppercase tracking-wider text-zinc-300">
+          plans
+        </h3>
+        <span className="text-[11px] text-zinc-500">
+          {project.specs.length} {project.specs.length === 1 ? 'plan' : 'plans'}
+          {' · '}
+          {taskCount} {taskCount === 1 ? 'task' : 'tasks'}
         </span>
       </div>
 
       <ChainGraph
         chains={chains}
-        emptyText="(no specs) — 用 jjplan CLI 创建一个 spec"
+        emptyText="(no plans)"
         renderNode={(spec) => (
           <SpecNode
             spec={spec}
@@ -50,7 +49,7 @@ export default function SpecsView({
           />
         )}
       />
-    </div>
+    </section>
   );
 }
 

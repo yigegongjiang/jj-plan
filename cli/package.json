@@ -3,8 +3,12 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "mkdir -p dist && bun build src/main.ts --compile --target=bun-darwin-arm64 --define JJPLAN_VERSION=$(bun -p \"JSON.stringify(require('fs').readFileSync('../VERSION','utf8').trim())\") --outfile dist/jjplan-macos-arm64",
-    "build:local": "mkdir -p $HOME/.local/bin && bun build src/main.ts --compile --define JJPLAN_VERSION=$(bun -p \"JSON.stringify(require('fs').readFileSync('../VERSION','utf8').trim())\") --outfile $HOME/.local/bin/jjplan",
+    "build": "bun run build:jjplan && bun run build:jjask",
+    "build:jjplan": "mkdir -p dist && bun build src/main.ts --compile --target=bun-darwin-arm64 --define JJPLAN_VERSION=$(bun -p \"JSON.stringify(require('fs').readFileSync('../VERSION','utf8').trim())\") --define JJPLAN_ENTRY='\"jjplan\"' --outfile dist/jjplan-macos-arm64",
+    "build:jjask": "mkdir -p dist && bun build src/main.ts --compile --target=bun-darwin-arm64 --define JJPLAN_VERSION=$(bun -p \"JSON.stringify(require('fs').readFileSync('../VERSION','utf8').trim())\") --define JJPLAN_ENTRY='\"jjask\"' --outfile dist/jjask-macos-arm64",
+    "build:local": "bun run build:local:jjplan && bun run build:local:jjask",
+    "build:local:jjplan": "mkdir -p $HOME/.local/bin && bun build src/main.ts --compile --define JJPLAN_VERSION=$(bun -p \"JSON.stringify(require('fs').readFileSync('../VERSION','utf8').trim())\") --define JJPLAN_ENTRY='\"jjplan\"' --outfile $HOME/.local/bin/jjplan",
+    "build:local:jjask": "mkdir -p $HOME/.local/bin && bun build src/main.ts --compile --define JJPLAN_VERSION=$(bun -p \"JSON.stringify(require('fs').readFileSync('../VERSION','utf8').trim())\") --define JJPLAN_ENTRY='\"jjask\"' --outfile $HOME/.local/bin/jjask",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {

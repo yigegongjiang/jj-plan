@@ -1,4 +1,5 @@
 import type {
+  Ask,
   Project,
   Spec,
   SpecStatus,
@@ -88,4 +89,15 @@ export const api = {
 
   deleteTask: (t: string, id: string) =>
     request<null>(t, 'DELETE', `/tasks/${encodeURIComponent(id)}`),
+
+  listAsks: (t: string, project: string, limit?: number) => {
+    const q = limit !== undefined ? `?limit=${limit}` : '';
+    return request<Ask[]>(t, 'GET', `/projects/${encodeURIComponent(project)}/asks${q}`);
+  },
+
+  patchAsk: (t: string, id: string, body: { body: string }) =>
+    request<Ask>(t, 'PATCH', `/asks/${encodeURIComponent(id)}`, body),
+
+  deleteAsk: (t: string, id: string) =>
+    request<null>(t, 'DELETE', `/asks/${encodeURIComponent(id)}`),
 };

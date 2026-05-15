@@ -13,7 +13,7 @@ export default function ProjectsList({ projects, onOpen, onDelete }: Props) {
   if (projects.length === 0) {
     return (
       <div className="text-center text-zinc-500 py-16 text-sm">
-        (no projects) — 用 jjplan CLI 创建一个 spec 即可初始化项目
+        (no projects)
       </div>
     );
   }
@@ -32,7 +32,7 @@ export default function ProjectsList({ projects, onOpen, onDelete }: Props) {
               {p.name}
             </div>
             <div className="text-xs text-zinc-500">
-              {p.specs.length} {p.specs.length === 1 ? 'spec' : 'specs'} ·{' '}
+              {p.specs.length} {p.specs.length === 1 ? 'plan' : 'plans'} ·{' '}
               {taskCount} {taskCount === 1 ? 'task' : 'tasks'}
             </div>
             <div className="mt-1 flex items-center justify-between gap-2">

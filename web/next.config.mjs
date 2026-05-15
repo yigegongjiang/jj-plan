@@ -1,8 +1,7 @@
 /** @type {import('next').NextConfig} */
-const REMOTE =
-  process.env.JJPLAN_REMOTE || 'https://jjplan.fan-yang2019.workers.dev';
+const REMOTE = process.env.JJPLAN_REMOTE || "https://jjplan.yigegongjiang.com";
 
-const isProd = process.env.NODE_ENV === 'production';
+const isProd = process.env.NODE_ENV === "production";
 
 // Production (`next build`) emits a static export consumed by the Worker
 // [assets] binding — same-origin in prod, no proxy needed.
@@ -12,7 +11,7 @@ const isProd = process.env.NODE_ENV === 'production';
 // it as long as the field is present, even when it returns []).
 const config = isProd
   ? {
-      output: 'export',
+      output: "export",
       trailingSlash: true,
       images: { unoptimized: true },
       reactStrictMode: true,
@@ -23,10 +22,11 @@ const config = isProd
       reactStrictMode: true,
       async rewrites() {
         return [
-          { source: '/projects',     destination: `${REMOTE}/projects` },
-          { source: '/projects/:p*', destination: `${REMOTE}/projects/:p*` },
-          { source: '/specs/:p*',    destination: `${REMOTE}/specs/:p*` },
-          { source: '/tasks/:p*',    destination: `${REMOTE}/tasks/:p*` },
+          { source: "/projects", destination: `${REMOTE}/projects` },
+          { source: "/projects/:p*", destination: `${REMOTE}/projects/:p*` },
+          { source: "/specs/:p*", destination: `${REMOTE}/specs/:p*` },
+          { source: "/tasks/:p*", destination: `${REMOTE}/tasks/:p*` },
+          { source: "/asks/:p*", destination: `${REMOTE}/asks/:p*` },
         ];
       },
     };

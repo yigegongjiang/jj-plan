@@ -95,13 +95,18 @@ export default function SpecDetail({
       </section>
 
       <section className="space-y-3">
-        <div className="text-[11px] text-zinc-500 uppercase tracking-wider">
-          tasks ({spec.tasks.length})
+        <div className="flex items-baseline gap-3 flex-wrap">
+          <h3 className="text-sm font-semibold uppercase tracking-wider text-zinc-300">
+            tasks
+          </h3>
+          <span className="text-[11px] text-zinc-500">
+            {spec.tasks.length} {spec.tasks.length === 1 ? 'task' : 'tasks'}
+          </span>
         </div>
         <ChainGraph
           chains={taskChain}
           selectedId={selectedId}
-          emptyText="(no tasks) — 用 jjplan CLI 在此 spec 下创建一个 task"
+          emptyText="(no tasks)"
           renderNode={(task, { isSelected }) => (
             <TaskNode
               task={task}

@@ -2,6 +2,13 @@
 
 本文件记录 jjplan 的版本变更, 格式参考 [Keep a Changelog](https://keepachangelog.com).
 
+## [0.8.0] - 2026-05-15
+
+### Added
+
+- 新增 `jjask` 二进制 (与 `jjplan` 共享一份 CLI 源码), 端点 `/projects/:name/asks` 与 `/asks/:id`, migration `0003_add_asks.sql` 仅 CREATE `asks` 表. Schema/路由/Dashboard 链表与级联沿用 `specs`. `asks` 字段: body (必填) + origin (创建后不可改) + prev_id 单链.
+- install.sh 同时安装 `jjplan` + `jjask`, 共用 `~/.jjplan/config.json`.
+
 ## [0.7.0] - 2026-05-10
 
 ### Changed

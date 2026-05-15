@@ -50,6 +50,19 @@ interface TaskRow {
   updated_at: number;
 }
 
+interface AskRow {
+  id: string;
+  project_id: string;
+  body: string;
+  origin: string;
+  prev_id: string | null;
+  created_at: number;
+  updated_at: number;
+}
+
+const ASK_LIMIT_DEFAULT = 3;
+const ASK_LIMIT_MAX = 100;
+
 const app = new Hono<{ Bindings: Bindings }>();
 
 // ---------- middleware ----------
@@ -57,6 +70,7 @@ const app = new Hono<{ Bindings: Bindings }>();
 app.use('/projects/*', (c, next) => bearerAuth({ token: c.env.JJPLAN_TOKEN })(c, next));
 app.use('/specs/*', (c, next) => bearerAuth({ token: c.env.JJPLAN_TOKEN })(c, next));
 app.use('/tasks/*', (c, next) => bearerAuth({ token: c.env.JJPLAN_TOKEN })(c, next));
+app.use('/asks/*', (c, next) => bearerAuth({ token: c.env.JJPLAN_TOKEN })(c, next));
 
 app.onError((err, c) => {
   if (err instanceof HTTPException) {
@@ -213,6 +227,10 @@ async function readTask(db: D1Database, id: string) {
 
 async function readProject(db: D1Database, name: string) {
   return db.prepare('SELECT * FROM projects WHERE name = ?').bind(name).first<ProjectRow>();
+}
+
+async function readAsk(db: D1Database, id: string) {
+  return db.prepare('SELECT * FROM asks WHERE id = ?').bind(id).first<AskRow>();
 }
 
 // Parent-bump statement factories. They only build the prepared statement;
@@ -692,6 +710,189 @@ app.delete('/tasks/:id', async (c) => {
   if (!results[0] || results[0].meta.changes === 0) {
     const stillExists = await readTask(c.env.DB, id);
     if (!stillExists) return c.json({ error: 'task not found' }, 404);
+    return c.json({ error: 'concurrent modification, retry' }, 409);
+  }
+  return c.body(null, 204);
+});
+
+// ---------- asks ----------
+// Same project/chain shape as specs; only body + immutable origin columns.
+
+function parseAskBody(raw: unknown): { ok: true; value: string } | { ok: false; error: string } {
+  if (typeof raw !== 'string' || raw.length === 0) {
+    return { ok: false, error: 'body required' };
+  }
+  if (raw.length > MAX_BODY_LEN) {
+    return { ok: false, error: `body too long (max ${MAX_BODY_LEN} chars)` };
+  }
+  return { ok: true, value: raw };
+}
+
+function parseAskOrigin(raw: unknown): { ok: true; value: string } | { ok: false; error: string } {
+  if (raw === undefined || raw === null) return { ok: true, value: '' };
+  if (typeof raw !== 'string') return { ok: false, error: 'origin must be string' };
+  if (raw.length > MAX_BODY_LEN) {
+    return { ok: false, error: `origin too long (max ${MAX_BODY_LEN} chars)` };
+  }
+  return { ok: true, value: raw };
+}
+
+app.post('/projects/:name/asks', async (c) => {
+  const name = c.req.param('name');
+  if (name.length === 0 || name.length > MAX_PROJECT_NAME_LEN) {
+    return c.json({ error: `project name length must be 1..${MAX_PROJECT_NAME_LEN}` }, 400);
+  }
+
+  const parsedBody = await parseJsonBody<{
+    body?: unknown;
+    origin?: unknown;
+    prev_id?: unknown;
+  }>(c);
+  if (!parsedBody.ok) return parsedBody.response;
+
+  const bodyParsed = parseAskBody(parsedBody.value.body);
+  if (!bodyParsed.ok) return c.json({ error: bodyParsed.error }, 400);
+  const originParsed = parseAskOrigin(parsedBody.value.origin);
+  if (!originParsed.ok) return c.json({ error: originParsed.error }, 400);
+
+  let prevId: string | null = null;
+  if (parsedBody.value.prev_id !== undefined && parsedBody.value.prev_id !== null) {
+    if (typeof parsedBody.value.prev_id !== 'string') {
+      return c.json({ error: 'prev_id must be string or null' }, 400);
+    }
+    const prev = await c.env.DB
+      .prepare('SELECT project_id FROM asks WHERE id = ?')
+      .bind(parsedBody.value.prev_id)
+      .first<{ project_id: string }>();
+    if (!prev) return c.json({ error: 'prev_id ask not found' }, 400);
+    if (prev.project_id !== name) {
+      return c.json({ error: 'prev_id must belong to the same project' }, 400);
+    }
+    prevId = parsedBody.value.prev_id;
+  }
+
+  const id = ulid();
+  const t = now();
+  try {
+    await c.env.DB.batch([
+      c.env.DB
+        .prepare('INSERT OR IGNORE INTO projects (name, created_at, updated_at) VALUES (?, ?, ?)')
+        .bind(name, t, t),
+      c.env.DB
+        .prepare(
+          'INSERT INTO asks (id, project_id, body, origin, prev_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        )
+        .bind(id, name, bodyParsed.value, originParsed.value, prevId, t, t),
+      bumpProject(c.env.DB, name, t),
+    ]);
+  } catch (e) {
+    if (isUniqueViolation(e)) {
+      return c.json({ error: 'prev_id already has a successor' }, 409);
+    }
+    if (isFkViolation(e)) {
+      return c.json({ error: 'prev_id no longer exists' }, 400);
+    }
+    throw e;
+  }
+  return c.json(await readAsk(c.env.DB, id), 201);
+});
+
+app.get('/projects/:name/asks', async (c) => {
+  const name = c.req.param('name');
+  const project = await readProject(c.env.DB, name);
+  if (!project) return c.json({ error: 'project not found' }, 404);
+
+  const rawLimit = c.req.query('limit');
+  let limit = ASK_LIMIT_DEFAULT;
+  if (rawLimit !== undefined) {
+    const n = Number(rawLimit);
+    if (!Number.isInteger(n) || n < 1 || n > ASK_LIMIT_MAX) {
+      return c.json({ error: `limit must be integer in 1..${ASK_LIMIT_MAX}` }, 400);
+    }
+    limit = n;
+  }
+
+  const { results } = await c.env.DB
+    .prepare('SELECT * FROM asks WHERE project_id = ? ORDER BY updated_at DESC LIMIT ?')
+    .bind(name, limit)
+    .all<AskRow>();
+  return c.json(results);
+});
+
+app.get('/asks/:id', async (c) => {
+  const id = c.req.param('id');
+  const ask = await readAsk(c.env.DB, id);
+  if (!ask) return c.json({ error: 'ask not found' }, 404);
+  return c.json(ask);
+});
+
+// Only body is patchable; origin is immutable.
+app.patch('/asks/:id', async (c) => {
+  const id = c.req.param('id');
+  const parsedBody = await parseJsonBody<{ body?: unknown }>(c);
+  if (!parsedBody.ok) return parsedBody.response;
+  const bodyParsed = parseAskBody(parsedBody.value.body);
+  if (!bodyParsed.ok) return c.json({ error: bodyParsed.error }, 400);
+
+  const existing = await readAsk(c.env.DB, id);
+  if (!existing) return c.json({ error: 'ask not found' }, 404);
+
+  const ts = now();
+  await c.env.DB.batch([
+    c.env.DB
+      .prepare('UPDATE asks SET body = ?, updated_at = ? WHERE id = ?')
+      .bind(bodyParsed.value, ts, id),
+    bumpProject(c.env.DB, existing.project_id, ts),
+  ]);
+  return c.json(await readAsk(c.env.DB, id));
+});
+
+// Same OCC pattern as DELETE /specs/:id.
+app.delete('/asks/:id', async (c) => {
+  const id = c.req.param('id');
+  const ask = await readAsk(c.env.DB, id);
+  if (!ask) return c.json({ error: 'ask not found' }, 404);
+
+  const succ = await c.env.DB
+    .prepare('SELECT id FROM asks WHERE prev_id = ?')
+    .bind(id)
+    .first<{ id: string }>();
+
+  const t = now();
+  const ops = [
+    c.env.DB
+      .prepare('DELETE FROM asks WHERE id = ? AND prev_id IS ?')
+      .bind(id, ask.prev_id),
+  ];
+  if (succ) {
+    ops.push(
+      c.env.DB
+        .prepare(
+          'UPDATE asks SET prev_id = ?, updated_at = ? WHERE id = ? AND NOT EXISTS (SELECT 1 FROM asks WHERE id = ?)',
+        )
+        .bind(ask.prev_id, t, succ.id, id),
+    );
+  }
+  ops.push(
+    c.env.DB
+      .prepare(
+        'UPDATE projects SET updated_at = ? WHERE name = ? AND NOT EXISTS (SELECT 1 FROM asks WHERE id = ?)',
+      )
+      .bind(t, ask.project_id, id),
+  );
+
+  let results;
+  try {
+    results = await c.env.DB.batch(ops);
+  } catch (e) {
+    if (isUniqueViolation(e) || isFkViolation(e)) {
+      return c.json({ error: 'concurrent modification, retry' }, 409);
+    }
+    throw e;
+  }
+  if (!results[0] || results[0].meta.changes === 0) {
+    const stillExists = await readAsk(c.env.DB, id);
+    if (!stillExists) return c.json({ error: 'ask not found' }, 404);
     return c.json({ error: 'concurrent modification, retry' }, 409);
   }
   return c.body(null, 204);
