@@ -2,6 +2,22 @@
 
 本文件记录 jjplan 的版本变更, 格式参考 [Keep a Changelog](https://keepachangelog.com).
 
+## [0.8.12] - 2026-05-16
+
+### Fixed
+
+- **iPhone 顶部 immersive 二次修复 (sticky 占位问题)**: 0.8.11 把 ProjectTabs tab bar 改成 `sticky top:env(safe-area-inset-top)` 后, 用户实测 status bar 下方仍是黑色, 仅第一次刷新瞬间 immersive 短暂工作. 根因: **sticky 元素被 stuck 到 viewport 顶部时, 其在 normal flow 中的原位仍保留占位空间** — 该占位是空白 (= body 黑色). main 内容是 sticky 的兄弟, paint 在 sticky 占位之下, 永远无法 paint 到占位空间内 (即 status bar 区). 改用 fixed (脱离 flow, 不占空间) 让 main 内容能 paint 到 viewport top, 被 fixed elements 半透明 backdrop-blur 覆盖 (V2EX 风格 immersive blur).
+- 4 处改动 — (1) `Dashboard.tsx` `<header>` 改回 `fixed top-0 inset-x-0 z-30`, 但 mobile + desktop 统一 `bg-zinc-950/70 backdrop-blur` (0.8.10 仅 desktop 半透明, mobile 是 `bg-zinc-950` 不透明; 现统一半透明). 不再 hide-on-scroll (无 transition / translate), 始终可见 — fixed + blur 不触发 0.8.9 的 sticky+blur+transform iOS jitter; (2) `Dashboard.tsx` `<main>` 用 `padding-top` 替代 `margin-top`, 紧贴 document.y=0, padding = `safe + 3.75rem mobile / safe + 5rem desktop` (含 h-12 header + breathing); (3) `ProjectTabs.tsx` tablist 由 sticky 改为 `fixed top-[calc(safe+3rem)] sm:top-[calc(safe+3.5rem)] inset-x-0 z-20 h-10 sm:h-11`, 半透明 backdrop-blur, 不再 `-mx-3` (fixed inset-x-0 全宽); (4) `ProjectTabs.tsx` content wrapper `pt-3` → `pt-[calc(2.5rem+0.75rem)] sm:pt-[calc(2.75rem+1rem)]` 避开 fixed tab bar.
+
+### Removed
+
+- `web/lib/useScrollDirection.ts`: 自 0.8.11 已无 import, dead code, 删除. 不再需要 scroll-aware hide 行为 (header/tab bar 始终 fixed 可见).
+
+### Notes
+
+- 零 BREAKING. CLI / Worker / Schema / API 零变化.
+- 行为变化: header + tab bar **始终 fixed 可见** (失去 scroll-up reveal 便利). main 内容 scroll 时 paint 到 viewport top, 被半透明 backdrop-blur 透出 — V2EX iOS app 风格. status bar 下方区域 (=viewport.top=0..safe) 始终被 fixed header blur 覆盖, 内容透过 blur 显示, 不再是死黑.
+
 ## [0.8.11] - 2026-05-16
 
 ### Changed
