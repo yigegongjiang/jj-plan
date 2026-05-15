@@ -2,55 +2,24 @@
 
 本文件记录 jjplan 的版本变更, 格式参考 [Keep a Changelog](https://keepachangelog.com).
 
+## [0.8.14] - 2026-05-16
+
+### Docs
+
+- CHANGELOG cleanup: 0.8.10/0.8.11/0.8.12 是同一 immersive 问题的失败尝试 (fixed header / sticky tab bar / fixed+blur), 均在 0.8.13 完全撤销. 合并这三段冗长描述为 0.8.13 单段最终方案描述, 删除失败尝试细节 (git log 保留事实). 仅 docs 改动, 代码层零变化.
+
 ## [0.8.13] - 2026-05-16
 
 ### Changed
 
-- **彻底 normal flow scroll, 撤销 0.8.10/0.8.11/0.8.12 所有 fixed/sticky 设计**: 用户需求 = header / tab bar 都不固定, 跟内容一起 scroll up 滚出 viewport, main 内容直达屏幕顶部 (status bar 下方). 3 处改动 — (1) `Dashboard.tsx` `<header>` 维持 normal flow `bg-zinc-950 border-b pt-[env(safe-area-inset-top)]` (撤回 0.8.12 的 fixed + backdrop-blur); (2) `Dashboard.tsx` `<main>` 撤回 0.8.12 的 padding-top, 改回 `py-3 sm:py-6` (无任何 top spacer/offset, 紧贴 header 之后 normal flow); (3) `ProjectTabs.tsx` tablist 从 `fixed top:[…]` 改为纯 normal flow (`-mx-3 sm:-mx-4 px-3 sm:px-4 flex … border-b`), 移除 sticky/fixed/backdrop-blur/h-10 显式高度/z-index, content wrapper 改回 `pt-3`.
+- **iPhone 顶部 immersive (最终方案: 纯 normal flow scroll)**: header / tab bar 都不固定, scroll up 时跟内容一起滚出 viewport, main 直达屏幕顶部 (status bar 下方). 实现 = `viewport-fit=cover` (`app/layout.tsx` 加 `viewport = { viewportFit: 'cover', themeColor: '#09090b' }`, 让 webview 含 status bar 区域) + 全 normal flow 元素 (`Dashboard` `<header>` = `bg-zinc-950 border-b pt-[env(safe-area-inset-top)]` 自然占顶并把 breadcrumb 推到安全区下方; `<main>` = `py-3 sm:py-6` 无 mt/pt 顶部 offset; `ProjectTabs` tablist 纯 block: `-mx-3 sm:-mx-4 px-3 sm:px-4 flex … border-b`).
+- 删除 0.8.8 引入的 `useScrollDirection` + `scrollHidden` 隐藏机制及对应 hook 文件 (`lib/useScrollDirection.ts`). 删除 header / tab bar 的 sticky / fixed / backdrop-blur / transition-translate 全部样式. 删除 `<ProjectTabs scrollHidden>` prop.
 
 ### Notes
 
 - 零 BREAKING. CLI / Worker / Schema / API 零变化.
-- 这是最朴素的 normal flow scroll 模式: scroll up 时 header → tab bar → 内容依次滚出 viewport top. viewport-fit=cover 让 webview 含 status bar 区域, main 内容滚到 viewport top:0 时自然进入 status bar 下方 (immersive).
-- 失去的便利: scroll-up 不再 reveal header/tab bar (无 sticky/fixed). 要切 tab 或看 breadcrumb 需 scroll 到顶部. 这正是用户期望的纯净行为.
-
-## [0.8.12] - 2026-05-16
-
-### Fixed
-
-- **iPhone 顶部 immersive 二次修复 (sticky 占位问题)**: 0.8.11 把 ProjectTabs tab bar 改成 `sticky top:env(safe-area-inset-top)` 后, 用户实测 status bar 下方仍是黑色, 仅第一次刷新瞬间 immersive 短暂工作. 根因: **sticky 元素被 stuck 到 viewport 顶部时, 其在 normal flow 中的原位仍保留占位空间** — 该占位是空白 (= body 黑色). main 内容是 sticky 的兄弟, paint 在 sticky 占位之下, 永远无法 paint 到占位空间内 (即 status bar 区). 改用 fixed (脱离 flow, 不占空间) 让 main 内容能 paint 到 viewport top, 被 fixed elements 半透明 backdrop-blur 覆盖 (V2EX 风格 immersive blur).
-- 4 处改动 — (1) `Dashboard.tsx` `<header>` 改回 `fixed top-0 inset-x-0 z-30`, 但 mobile + desktop 统一 `bg-zinc-950/70 backdrop-blur` (0.8.10 仅 desktop 半透明, mobile 是 `bg-zinc-950` 不透明; 现统一半透明). 不再 hide-on-scroll (无 transition / translate), 始终可见 — fixed + blur 不触发 0.8.9 的 sticky+blur+transform iOS jitter; (2) `Dashboard.tsx` `<main>` 用 `padding-top` 替代 `margin-top`, 紧贴 document.y=0, padding = `safe + 3.75rem mobile / safe + 5rem desktop` (含 h-12 header + breathing); (3) `ProjectTabs.tsx` tablist 由 sticky 改为 `fixed top-[calc(safe+3rem)] sm:top-[calc(safe+3.5rem)] inset-x-0 z-20 h-10 sm:h-11`, 半透明 backdrop-blur, 不再 `-mx-3` (fixed inset-x-0 全宽); (4) `ProjectTabs.tsx` content wrapper `pt-3` → `pt-[calc(2.5rem+0.75rem)] sm:pt-[calc(2.75rem+1rem)]` 避开 fixed tab bar.
-
-### Removed
-
-- `web/lib/useScrollDirection.ts`: 自 0.8.11 已无 import, dead code, 删除. 不再需要 scroll-aware hide 行为 (header/tab bar 始终 fixed 可见).
-
-### Notes
-
-- 零 BREAKING. CLI / Worker / Schema / API 零变化.
-- 行为变化: header + tab bar **始终 fixed 可见** (失去 scroll-up reveal 便利). main 内容 scroll 时 paint 到 viewport top, 被半透明 backdrop-blur 透出 — V2EX iOS app 风格. status bar 下方区域 (=viewport.top=0..safe) 始终被 fixed header blur 覆盖, 内容透过 blur 显示, 不再是死黑.
-
-## [0.8.11] - 2026-05-16
-
-### Changed
-
-- **iPhone 顶部彻底 immersive (重做 0.8.10)**: 0.8.10 的 fixed header + main margin-top 方案因 `scrollHidden` 触发阈值 (60px) 与 main 顶部 offset (≈ safe + 48 ≈ 92px) 不同步, scroll-down 过渡期会暴露 12~32px body 黑底 (用户感受为 "安全区域突破不上去"); 且 mobile header 不透明 (`bg-zinc-950`) 完全遮挡 status bar 下方, scrollY < 92 时 main 内容无法进入. 4 处改动 — (1) `Dashboard.tsx` `<header>` 由 `fixed top-0 inset-x-0 z-20 + transform hide` 改为 normal flow (`bg-zinc-950 border-b pt-[env(safe-area-inset-top)]`); header 自然占据 document.y 0..(safe+48), scroll-down 自然滚出 viewport top, scroll-up 到顶部才 reveal — 不再需要 transform 模拟 hide; (2) `Dashboard.tsx` `<main>` 移除 `mt-[calc(env(safe-area-inset-top)+3rem)] sm:mt-[calc(env(safe-area-inset-top)+3.5rem)]`, 紧贴 header 下方, 任意 scroll 都让 main 内容立即覆盖 viewport top (status bar 下方); (3) `ProjectTabs.tsx` tablist sticky `top-[calc(3rem+env(safe-area-inset-top))] sm:top-[calc(3.5rem+env(safe-area-inset-top))]` 改为 `top-[env(safe-area-inset-top)]` 紧贴 status bar 下沿, mobile + desktop 统一 `bg-zinc-950/80 backdrop-blur` (因 translate-y-full 已移除, sticky+blur 不再触发 0.8.9 的 iOS jitter); 移除 `scrollHidden` prop / `transition-transform` / `-translate-y-full` — tab bar 始终 sticky 可见 (任意 scroll 位置都可切换 tab); (4) `Dashboard.tsx` 移除 `useScrollDirection` import 和 `scrollHidden` 状态、移除 `<ProjectTabs scrollHidden={…}>` 传参. `lib/useScrollDirection.ts` 文件保留 (无 import, dead code, 不影响 build; 后续清理另开 task).
-
-### Notes
-
-- 零 BREAKING. CLI / Worker / Schema / API 零变化.
-- 行为变化: scroll-up 不再立即 reveal breadcrumb header, 用户须 scroll 到顶部才看到 — 换来真正的 immersive (顶部内容直达 status bar 下方). tab bar 仍然 sticky 紧贴 status bar 下方, 切换 tab 不需要回顶.
-- 桌面端: header 也变 normal flow (原 fixed), 视觉差异 = scroll-down 时 header 跟随滚走 (原为始终 visible). 桌面长内容场景下 breadcrumb 不再永驻顶部, 与 mobile 行为统一.
-
-## [0.8.10] - 2026-05-15
-
-### Changed
-
-- **iPhone 顶部安全区 (沉浸式)**: mobile Safari scroll-aware 顶栏隐藏后 main 内容真正滑到状态栏/灵动岛背后, 不再有黑色空白带. 4 处改动 — (1) `app/layout.tsx` 导出 `viewport = { viewportFit: 'cover', themeColor: '#09090b' }`, 在 `<meta name=viewport>` 注入 `viewport-fit=cover`, 允许 content 延伸过 safe area, 同时 PWA 状态栏色与页面 zinc-950 一致; (2) `Dashboard.tsx` `<header>` 由 `sticky top-0` 改为 `fixed top-0 inset-x-0`, 关键: sticky 元素 translate 隐藏后仍占 normal-flow 布局空间 (= `safe_top + h-12` 高度) 会堵住 main 顶部, 改 fixed 后脱离布局流, main 可滑至屏顶; header 自身 `pt-[env(safe-area-inset-top)]` 让背景延伸状态栏背后并把 breadcrumb 推到安全区下方; (3) `Dashboard.tsx` `<main>` 加 `mt-[calc(env(safe-area-inset-top)+3rem)] sm:mt-[calc(env(safe-area-inset-top)+3.5rem)]` 补偿 fixed header 占位, 保持初始视觉间距不变; (4) `ProjectTabs.tsx` sticky tabs 的 `top` 由 `top-12 sm:top-14` 改为 `top-[calc(3rem+env(safe-area-inset-top))] sm:top-[calc(3.5rem+env(safe-area-inset-top))]`, 跟随 header 总高度紧贴 header 下沿.
-
-### Notes
-
-- 零 BREAKING. 桌面端零视觉变化 (env 在无 safe-area 设备上 = 0; fixed vs sticky 在桌面无 scrollHidden 场景下等价). 不影响底部 home indicator 区域版本号 v 角标.
+- 0.8.10 / 0.8.11 / 0.8.12 是同一问题的失败尝试 (fixed header / sticky tab bar / fixed+blur), 均在 0.8.13 完全撤销, 见 git log. CHANGELOG 仅保留最终方案描述.
+- 失去 scroll-up reveal header / sticky tab bar 的便利: 切 tab / 看 breadcrumb 需 scroll 到顶部. 这是 immersive 的物理代价 (任何 sticky/fixed 都会引入占位, 与 immersive 矛盾).
 
 ## [0.8.9] - 2026-05-15
 
