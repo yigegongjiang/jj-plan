@@ -2,6 +2,19 @@
 
 本文件记录 jjplan 的版本变更, 格式参考 [Keep a Changelog](https://keepachangelog.com).
 
+## [0.8.3] - 2026-05-15
+
+### Changed
+
+- `jjplan --help` / `jjask --help` TLDR 段补 `<project>=cwd basename` 约定: 让 cc (Claude Code) 在交互场景下默认用当前工作目录的 basename 作为 project name, 避免 AI 自由发挥导致 project 名分裂.
+- 删 `jjask --help` 三处 "与 jjplan 独立"/"与 jjplan 不同" 强加对比: TLDR / PURPOSE / I/O 段各一处, 改为独立陈述. AI 不需要被告知两者关系, 自会判断.
+- `jjask --help` TLDR 段 `--origin` 文案强约束化: 原"决策规则"式两路径并列 (4 行) 压成 1 行强制规则 — `body=改写时 --origin MUST=原话, 不可省`. 修复 cc 改写 body 后漏传 --origin 的高频问题.
+- `jjask --help` TLDR 段补 `[--after <prev_ask_id>]` 参数及注释行, 与 `~/.codex/AGENTS.md` (cc/codex 全局规则) 对齐. 原 main.ts TLDR 漏列 --after, 导致 cc 仅读 help 时不知道 ask 可串链.
+
+### Notes
+
+- 零 BREAKING. 用户仍可显式指定任意 project name 覆盖默认. CLI 行为/API/数据模型零变化.
+
 ## [0.8.2] - 2026-05-15
 
 ### Changed

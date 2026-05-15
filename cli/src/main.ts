@@ -534,7 +534,7 @@ function printJjplanHelp(): void {
     `jjplan ${VERSION}
 
 # TLDR
-jjplan: AI 用的 Spec/Task 跟踪 CLI. 三层模型 project -> spec -> task, id=ULID.
+jjplan: AI 用的 Spec/Task 跟踪 CLI. 三层模型 project -> spec -> task, id=ULID. <project>=cwd basename.
 循环: 写 spec 立计划 -> 拆 task -> 推 task status (todo/doing/done/blocked) -> 所有 task done 后 spec set done.
 
   jjplan spec new <project> <title>     # body 从 stdin 读; project 不存在自动建
@@ -622,17 +622,16 @@ function printJjaskHelp(): void {
     `jjask ${VERSION}
 
 # TLDR
-jjask: 落盘人类抛给 AI 的请求 (Q&A 记录), 与 jjplan 独立. 两层模型 project -> ask, id=ULID.
+jjask: 落盘人类抛给 AI 的请求 (Q&A 记录). 两层模型 project -> ask, id=ULID. <project>=cwd basename.
 
-  jjask new <project> <body> [--origin <原话>]
-    # body = 给后续 AI 的最终输入. 决策规则:
-    #   - 用户原话已清晰、适合直接喂 AI -> body=原话, 不传 --origin (默认路径)
-    #   - 用户原话含糊/口语化/欠上下文 -> LLM 先改写成精炼版作 body, 把原话放 --origin 留底
+  jjask new <project> <body> [--origin <原话>] [--after <prev_ask_id>]
+    # body=喂后续 AI 的最终输入. body=原话则省 --origin; body=改写 (原话口语化/含糊) 则 --origin MUST=原话, 不可省.
+    # --after: 接在上一条 ask 之后成链 (同一会话的追问/补充)
 
 输出: stdout 单行 JSON. body/origin 不读 stdin (位置/flag 参数). 查询/修改/删除见 jjask --help.
 
 # PURPOSE
-落盘人类抛给 AI 的请求 (body + 可选 origin 原话). 与 jjplan 独立.
+落盘人类抛给 AI 的请求 (body + 可选 origin 原话).
 
 # MODEL
 project (name) -- ask (id=ULID)
@@ -642,7 +641,7 @@ project (name) -- ask (id=ULID)
 
 # I/O
 - 输出: stdout 单行 JSON; DELETE 空 (204). 错误: stderr \`jjask: <msg>\` + 非零 exit.
-- <body> / --origin / --body 全是位置/flag 参数, 不读 stdin (与 jjplan 不同).
+- <body> / --origin / --body 全是位置/flag 参数, 不读 stdin.
 - 限长 (chars): body 1..${MAX_BODY_LEN}, origin 0..${MAX_BODY_LEN}, project 1..${MAX_PROJECT_NAME_LEN}.
 
 # COMMANDS
