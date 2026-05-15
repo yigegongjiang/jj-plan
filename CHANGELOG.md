@@ -2,6 +2,17 @@
 
 本文件记录 jjplan 的版本变更, 格式参考 [Keep a Changelog](https://keepachangelog.com).
 
+## [0.8.7] - 2026-05-15
+
+### Changed
+
+- `ChainGraph` 加 3 层窄屏可感知性 (仅 `chain.length >= 2` 生效, length=1 单 spec 完全保持现状): (a) chain 上方插入一行 header `[链节图标] chain · N items · swipe →`, 首屏即告知"这是 N 节点链", 与独立 item 视觉差异化; (b) 横向滚动容器右沿叠 `pointer-events-none w-8 bg-gradient-to-l from-zinc-950 to-transparent` fade 渐变, 暗示内容向右延伸; (c) chain 第一个 item wrapper 加 `border-l-2 border-zinc-700 pl-1.5` 起点锚, 即便看不到第二个 item 也能识别"链起点".
+- 解决 iPhone 视口 ~375-400px 下首个 `AskCard` (`w-[22rem]` ≈ 352px) 几乎占满屏幕、`no-scrollbar` 又隐藏滚动条、用户首屏完全感知不到后续链节点的体验问题. 三处用 ChainGraph (`AsksView` / `SpecsView` / `SpecDetail`) 自动受益, 调用方零改动.
+
+### Notes
+
+- 零 BREAKING. CLI / Worker / Schema / API 零变化. 宽屏不影响 (`min-w-max` 横向布局, fade 仅覆盖右沿).
+
 ## [0.8.6] - 2026-05-15
 
 ### Changed
