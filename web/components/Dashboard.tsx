@@ -432,7 +432,7 @@ export default function Dashboard() {
     <div className="min-h-screen">
       <header
         className={
-          'sticky top-0 z-20 backdrop-blur bg-zinc-950/80 border-b border-zinc-800 transition-transform duration-200 ease-out ' +
+          'sticky top-0 z-20 bg-zinc-950 sm:bg-zinc-950/80 sm:backdrop-blur border-b border-zinc-800 transition-transform duration-200 ease-out ' +
           (scrollHidden
             ? '-translate-y-full sm:translate-y-0'
             : 'translate-y-0')

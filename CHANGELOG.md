@@ -2,6 +2,16 @@
 
 本文件记录 jjplan 的版本变更, 格式参考 [Keep a Changelog](https://keepachangelog.com).
 
+## [0.8.9] - 2026-05-15
+
+### Fixed
+
+- **iPhone 横向飘晃**: 4 处修复 — (1) `AsksView` standalone grid `minmax(22rem, 1fr)` → `minmax(min(20rem, 100%), 1fr)`, 22rem=352px 在 iPhone SE 视口 ~351px 可用宽下溢出 1px 触发 body 横滚, `min(20rem, 100%)` 让窄屏单列宽=容器宽不溢出, 宽屏 ≥20rem 才起多列; (2) `ChainGraph` 横滚容器 `-mx-4 px-4` → `-mx-3 px-3 sm:-mx-4 sm:px-4`, 严格对齐 Dashboard `<main>` 的 `px-3 sm:px-4`, 修复 mobile 时 chain 容器向外多延 4px 超视口; (3) `globals.css` html/body 加 `overflow-x: hidden` + `body { overscroll-behavior-x: none }`, 任何残余 1px 溢出都不会触发横滑, 同时抑制 iOS 横向 overscroll bounce; (4) Dashboard 顶栏 + `ProjectTabs` tab bar 的 `backdrop-blur` 在 mobile 下移除 (`bg-zinc-950` 纯色), 桌面 `sm:` 保留磨砂 — 修复 iOS Safari 上 `sticky + backdrop-blur + transform` 同时存在时已知的 jitter / 抖动.
+
+### Notes
+
+- 零 BREAKING. 桌面端视觉 0 变化 (backdrop-blur 仅 mobile 退化为纯色). chain 横滚容器 mobile padding 由 16px 缩到 12px, 与 main 一致.
+
 ## [0.8.8] - 2026-05-15
 
 ### Changed

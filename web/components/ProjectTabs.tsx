@@ -43,7 +43,7 @@ export default function ProjectTabs({
       <div
         role="tablist"
         className={
-          'sticky top-12 sm:top-14 z-10 -mx-3 sm:-mx-4 px-3 sm:px-4 flex items-center gap-4 sm:gap-6 border-b border-zinc-800 bg-zinc-950/90 backdrop-blur transition-transform duration-200 ease-out ' +
+          'sticky top-12 sm:top-14 z-10 -mx-3 sm:-mx-4 px-3 sm:px-4 flex items-center gap-4 sm:gap-6 border-b border-zinc-800 bg-zinc-950 sm:bg-zinc-950/90 sm:backdrop-blur transition-transform duration-200 ease-out ' +
           (scrollHidden
             ? '-translate-y-full sm:translate-y-0'
             : 'translate-y-0')

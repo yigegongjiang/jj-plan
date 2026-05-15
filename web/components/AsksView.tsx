@@ -51,7 +51,7 @@ export default function AsksView({ asks, onEdit, onDelete }: Props) {
   return (
     <section className="space-y-4">
       {standalones.length > 0 && (
-        <div className="grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(22rem,1fr))]">
+        <div className="grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(min(20rem,100%),1fr))]">
           {standalones.map((ask) => (
             <AskCard
               key={ask.id}

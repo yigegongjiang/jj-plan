@@ -42,8 +42,8 @@ export default function ChainGraph<T extends NodeLike>({
                 </span>
               </div>
             )}
-            <div className="relative -mx-4">
-              <div className="overflow-x-auto no-scrollbar px-4">
+            <div className="relative -mx-3 sm:-mx-4">
+              <div className="overflow-x-auto no-scrollbar px-3 sm:px-4">
                 <div className="flex items-stretch gap-2 min-w-max">
                   {chain.map((node, idx) => (
                     <div key={node.id} className="flex items-stretch gap-2">
