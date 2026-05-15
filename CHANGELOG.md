@@ -2,6 +2,16 @@
 
 本文件记录 jjplan 的版本变更, 格式参考 [Keep a Changelog](https://keepachangelog.com).
 
+## [0.8.15] - 2026-05-16
+
+### Fixed
+
+- **iPhone Spec/Task 卡片单节点横滑**: 与 Ask 卡片对齐, 单 spec / 单 task 不再强制走 ChainGraph 的 `flex+min-w-max+overflow-x-auto` 路径. 根因 = `SpecsView` / `SpecDetail` 把所有节点 (包括 length=1) 都塞进 ChainGraph, 卡片 `min-w-[16rem] max-w-[28rem]` (Spec) / `min-w-[14rem] max-w-[24rem]` (Task) 在 iPhone 视口 (~351px 可用宽) 下被父级 `min-w-max` 撑到 max-w 上限, 触发卡片内横滑且 title `truncate` 被绕过. 修复 = 仿 `AsksView` (0.8.9 已为 Ask 卡片完成的方案): `buildChains` 拆 standalones (length=1) / chains (length>=2), standalones 入 `grid [grid-template-columns:repeat(auto-fill,minmax(min(20rem,100%),1fr))]` 单列 100%, chains 才走 ChainGraph + 节点 `w-[22rem] shrink-0` (= Ask 链节点宽度); `SpecNode` / `TaskNode` 去 `min-w-/max-w-` 限制改 `w-full min-w-0`, title `truncate` 在新 grid 父级下生效.
+
+### Notes
+
+- 零 BREAKING. CLI / Worker / Schema / API 零变化. 桌面端单节点行为变化: 不再 `min-w-max` 横滑, 改为 grid 多列自适应 (auto-fill, 列宽 ≥20rem), 与 Ask 卡片一致. 真链 (length>=2) 行为完全不变 (仍 ChainGraph 横滑 + ChainBadge + fade gradient + border-l-2 起点锚).
+
 ## [0.8.14] - 2026-05-16
 
 ### Docs

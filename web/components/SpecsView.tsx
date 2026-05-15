@@ -20,22 +20,59 @@ export default function SpecsView({
   onEditSpec,
   onDeleteSpec,
 }: Props) {
-  const chains = useMemo(() => buildChains(project.specs), [project.specs]);
+  // 对齐 AsksView: 单节点 (length=1) 走 grid 一列 100%; 真链 (length>=2) 才走 ChainGraph 横滑.
+  // 避免移动端单 spec 被 ChainGraph 的 flex+min-w-max 撑到 max-w 触发横滚.
+  const { standalones, chains } = useMemo(() => {
+    const all = buildChains(project.specs);
+    const standalones: Spec[] = [];
+    const chains: Spec[][] = [];
+    for (const c of all) {
+      if (c.length === 1) standalones.push(c[0]);
+      else chains.push(c);
+    }
+    return { standalones, chains };
+  }, [project.specs]);
+
+  if (standalones.length === 0 && chains.length === 0) {
+    return (
+      <section>
+        <div className="text-sm text-zinc-400 italic px-4 py-8 text-center">
+          (no plans)
+        </div>
+      </section>
+    );
+  }
 
   return (
-    <section>
-      <ChainGraph
-        chains={chains}
-        emptyText="(no plans)"
-        renderNode={(spec) => (
-          <SpecNode
-            spec={spec}
-            onOpen={() => onOpenSpec(spec.id)}
-            onEdit={() => onEditSpec(spec)}
-            onDelete={() => onDeleteSpec(spec)}
-          />
-        )}
-      />
+    <section className="space-y-4">
+      {standalones.length > 0 && (
+        <div className="grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(min(20rem,100%),1fr))]">
+          {standalones.map((spec) => (
+            <SpecNode
+              key={spec.id}
+              spec={spec}
+              onOpen={() => onOpenSpec(spec.id)}
+              onEdit={() => onEditSpec(spec)}
+              onDelete={() => onDeleteSpec(spec)}
+            />
+          ))}
+        </div>
+      )}
+      {chains.length > 0 && (
+        <ChainGraph
+          chains={chains}
+          renderNode={(spec) => (
+            <div className="w-[22rem] shrink-0">
+              <SpecNode
+                spec={spec}
+                onOpen={() => onOpenSpec(spec.id)}
+                onEdit={() => onEditSpec(spec)}
+                onDelete={() => onDeleteSpec(spec)}
+              />
+            </div>
+          )}
+        />
+      )}
     </section>
   );
 }
@@ -56,7 +93,7 @@ function SpecNode({ spec, onOpen, onEdit, onDelete }: NodeProps) {
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') onOpen();
       }}
-      className="group min-w-[16rem] max-w-[28rem] rounded-lg border border-zinc-800 bg-zinc-950 hover:border-zinc-600 hover:bg-zinc-900/60 transition p-3 cursor-pointer"
+      className="group w-full min-w-0 rounded-lg border border-zinc-800 bg-zinc-950 hover:border-zinc-600 hover:bg-zinc-900/60 transition p-3 cursor-pointer"
     >
       <div
         className="text-sm font-medium leading-snug truncate"

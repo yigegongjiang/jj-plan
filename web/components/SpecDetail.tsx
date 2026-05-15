@@ -1,7 +1,8 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import { buildChains } from '@/lib/chain';
 import { fmtTime } from '@/lib/format';
 import type { Spec, Task } from '@/lib/types';
 import ChainGraph from './ChainGraph';
@@ -22,8 +23,18 @@ export default function SpecDetail({
   onEditTask,
   onDeleteTask,
 }: Props) {
-  // tasks 已由 worker 按链表顺序返回，所以单 chain
-  const taskChain: Task[][] = spec.tasks.length > 0 ? [spec.tasks] : [];
+  // 对齐 AsksView / SpecsView: 单节点入 grid 一列 100%; 真链 (length>=2) 才走 ChainGraph 横滑.
+  // 避免移动端单 task 被 ChainGraph 的 flex+min-w-max 撑到 max-w 触发横滚.
+  const { standaloneTasks, taskChains } = useMemo(() => {
+    const all = buildChains(spec.tasks);
+    const standaloneTasks: Task[] = [];
+    const taskChains: Task[][] = [];
+    for (const c of all) {
+      if (c.length === 1) standaloneTasks.push(c[0]);
+      else taskChains.push(c);
+    }
+    return { standaloneTasks, taskChains };
+  }, [spec.tasks]);
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const itemRefs = useRef<Map<string, HTMLElement>>(new Map());
@@ -103,20 +114,45 @@ export default function SpecDetail({
             {spec.tasks.length} {spec.tasks.length === 1 ? 'task' : 'tasks'}
           </span>
         </div>
-        <ChainGraph
-          chains={taskChain}
-          selectedId={selectedId}
-          emptyText="(no tasks)"
-          renderNode={(task, { isSelected }) => (
-            <TaskNode
-              task={task}
-              seq={spec.tasks.indexOf(task) + 1}
-              total={spec.tasks.length}
-              isSelected={isSelected}
-              onClick={() => handleSelect(task.id)}
-            />
-          )}
-        />
+        {standaloneTasks.length === 0 && taskChains.length === 0 ? (
+          <div className="text-sm text-zinc-400 italic px-4 py-8 text-center">
+            (no tasks)
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {standaloneTasks.length > 0 && (
+              <div className="grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(min(20rem,100%),1fr))]">
+                {standaloneTasks.map((task) => (
+                  <TaskNode
+                    key={task.id}
+                    task={task}
+                    seq={spec.tasks.indexOf(task) + 1}
+                    total={spec.tasks.length}
+                    isSelected={task.id === selectedId}
+                    onClick={() => handleSelect(task.id)}
+                  />
+                ))}
+              </div>
+            )}
+            {taskChains.length > 0 && (
+              <ChainGraph
+                chains={taskChains}
+                selectedId={selectedId}
+                renderNode={(task, { isSelected }) => (
+                  <div className="w-[22rem] shrink-0">
+                    <TaskNode
+                      task={task}
+                      seq={spec.tasks.indexOf(task) + 1}
+                      total={spec.tasks.length}
+                      isSelected={isSelected}
+                      onClick={() => handleSelect(task.id)}
+                    />
+                  </div>
+                )}
+              />
+            )}
+          </div>
+        )}
       </section>
 
       {spec.tasks.length > 0 && (
@@ -156,7 +192,7 @@ function TaskNode({ task, seq, total, isSelected, onClick }: NodeProps) {
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') onClick();
       }}
-      className={`relative min-w-[14rem] max-w-[24rem] rounded-lg border bg-zinc-950 transition p-3 cursor-pointer ${
+      className={`relative w-full min-w-0 rounded-lg border bg-zinc-950 transition p-3 cursor-pointer ${
         isSelected
           ? 'border-blue-500 bg-blue-950/20'
           : 'border-zinc-800 hover:border-zinc-600 hover:bg-zinc-900/60'
