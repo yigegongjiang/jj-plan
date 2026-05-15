@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { ApiError, api } from '@/lib/api';
+import { useScrollDirection } from '@/lib/useScrollDirection';
 import {
   ASK_LIMIT_MAX,
   SPEC_STATUSES,
@@ -84,6 +85,8 @@ export default function Dashboard() {
   // Asks lazy-loaded per active project; reset on navigation to avoid stale flashes.
   const [asks, setAsks] = useState<Ask[] | null>(null);
   const [asksProject, setAsksProject] = useState<string | null>(null);
+
+  const { hidden: scrollHidden } = useScrollDirection();
 
   // Hydrate from localStorage + URL once on mount.
   useEffect(() => {
@@ -427,8 +430,15 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen">
-      <header className="sticky top-0 z-10 backdrop-blur bg-zinc-950/80 border-b border-zinc-800">
-        <div className="px-4 h-14 flex items-center gap-3">
+      <header
+        className={
+          'sticky top-0 z-20 backdrop-blur bg-zinc-950/80 border-b border-zinc-800 transition-transform duration-200 ease-out ' +
+          (scrollHidden
+            ? '-translate-y-full sm:translate-y-0'
+            : 'translate-y-0')
+        }
+      >
+        <div className="px-3 sm:px-4 h-12 sm:h-14 flex items-center gap-3">
           <Breadcrumb route={route} activeSpecTitle={activeSpec?.title} onNavigate={navigate} />
           {loading && projects === null && (
             <span className="text-xs text-zinc-500 ml-auto">loading…</span>
@@ -436,7 +446,7 @@ export default function Dashboard() {
         </div>
       </header>
 
-      <main className="px-4 py-6 space-y-4">
+      <main className="px-3 sm:px-4 py-3 sm:py-6 space-y-4">
         {error && (
           <div className="px-4 py-2.5 rounded-md border border-red-900 bg-red-950/40 text-red-300 text-sm flex items-start justify-between gap-4">
             <span className="break-all">{error}</span>
@@ -481,6 +491,7 @@ export default function Dashboard() {
               (n, s) => n + s.tasks.length,
               0,
             )}
+            scrollHidden={scrollHidden}
             asks={
               <AsksView
                 asks={asksProject === activeProject.name ? asks : null}

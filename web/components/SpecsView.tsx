@@ -22,35 +22,20 @@ export default function SpecsView({
 }: Props) {
   const chains = useMemo(() => buildChains(project.specs), [project.specs]);
 
-  const taskCount = project.specs.reduce((n, s) => n + s.tasks.length, 0);
-
   return (
-    <section className="h-full flex flex-col space-y-3">
-      <div className="flex items-baseline gap-3 flex-wrap shrink-0">
-        <h3 className="text-sm font-semibold uppercase tracking-wider text-zinc-300">
-          plans
-        </h3>
-        <span className="text-[11px] text-zinc-500">
-          {project.specs.length} {project.specs.length === 1 ? 'plan' : 'plans'}
-          {' · '}
-          {taskCount} {taskCount === 1 ? 'task' : 'tasks'}
-        </span>
-      </div>
-
-      <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden pr-1">
-        <ChainGraph
-          chains={chains}
-          emptyText="(no plans)"
-          renderNode={(spec) => (
-            <SpecNode
-              spec={spec}
-              onOpen={() => onOpenSpec(spec.id)}
-              onEdit={() => onEditSpec(spec)}
-              onDelete={() => onDeleteSpec(spec)}
-            />
-          )}
-        />
-      </div>
+    <section>
+      <ChainGraph
+        chains={chains}
+        emptyText="(no plans)"
+        renderNode={(spec) => (
+          <SpecNode
+            spec={spec}
+            onOpen={() => onOpenSpec(spec.id)}
+            onEdit={() => onEditSpec(spec)}
+            onDelete={() => onDeleteSpec(spec)}
+          />
+        )}
+      />
     </section>
   );
 }

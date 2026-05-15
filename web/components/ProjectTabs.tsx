@@ -12,6 +12,7 @@ interface Props {
   taskCount: number;
   asks: ReactNode;
   plans: ReactNode;
+  scrollHidden?: boolean;
 }
 
 export default function ProjectTabs({
@@ -20,6 +21,7 @@ export default function ProjectTabs({
   taskCount,
   asks,
   plans,
+  scrollHidden = false,
 }: Props) {
   const [tab, setTab] = useState<Tab>(DEFAULT_TAB);
   const [hydrated, setHydrated] = useState(false);
@@ -37,27 +39,32 @@ export default function ProjectTabs({
   }, [tab, hydrated]);
 
   return (
-    <div className="flex flex-col h-[calc(100vh-9rem)] min-h-[20rem]">
+    <div className="flex flex-col">
       <div
         role="tablist"
-        className="flex items-center gap-6 shrink-0 border-b border-zinc-800"
+        className={
+          'sticky top-12 sm:top-14 z-10 -mx-3 sm:-mx-4 px-3 sm:px-4 flex items-center gap-4 sm:gap-6 border-b border-zinc-800 bg-zinc-950/90 backdrop-blur transition-transform duration-200 ease-out ' +
+          (scrollHidden
+            ? '-translate-y-full sm:translate-y-0'
+            : 'translate-y-0')
+        }
       >
         <TabButton
           active={tab === 'plans'}
           onClick={() => setTab('plans')}
           label="PLANS"
-          counts={`${specCount} specs · ${taskCount} tasks`}
+          counts={`${specCount} · ${taskCount}`}
+          fullCounts={`${specCount} specs · ${taskCount} tasks`}
         />
         <TabButton
           active={tab === 'asks'}
           onClick={() => setTab('asks')}
           label="ASKS"
           counts={`${askCount}`}
+          fullCounts={`${askCount}`}
         />
       </div>
-      <div className="flex-1 min-h-0 overflow-hidden pt-3">
-        {tab === 'plans' ? plans : asks}
-      </div>
+      <div className="pt-3">{tab === 'plans' ? plans : asks}</div>
     </div>
   );
 }
@@ -67,16 +74,23 @@ interface TabButtonProps {
   onClick: () => void;
   label: string;
   counts: string;
+  fullCounts: string;
 }
 
-function TabButton({ active, onClick, label, counts }: TabButtonProps) {
+function TabButton({
+  active,
+  onClick,
+  label,
+  counts,
+  fullCounts,
+}: TabButtonProps) {
   return (
     <button
       role="tab"
       aria-selected={active}
       onClick={onClick}
       className={
-        'flex items-baseline gap-2 px-1 py-2 -mb-px border-b-2 transition-colors ' +
+        'flex items-baseline gap-2 px-1 py-1.5 sm:py-2 -mb-px border-b-2 transition-colors ' +
         (active
           ? 'border-zinc-100 text-zinc-100'
           : 'border-transparent text-zinc-500 hover:text-zinc-300')
@@ -90,7 +104,10 @@ function TabButton({ active, onClick, label, counts }: TabButtonProps) {
       >
         {label}
       </span>
-      <span className="text-xs text-zinc-500 font-mono">{counts}</span>
+      <span className="text-xs text-zinc-500 font-mono">
+        <span className="sm:hidden">{counts}</span>
+        <span className="hidden sm:inline">{fullCounts}</span>
+      </span>
     </button>
   );
 }

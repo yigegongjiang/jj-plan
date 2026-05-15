@@ -2,6 +2,20 @@
 
 本文件记录 jjplan 的版本变更, 格式参考 [Keep a Changelog](https://keepachangelog.com).
 
+## [0.8.8] - 2026-05-15
+
+### Changed
+
+- **去重 header**: 删 `SpecsView` 内部 `<h3>plans</h3> + N plans · M tasks` 行 / `AsksView` 内部 `<h3>asks</h3> + N asks · standalone · chains` 行 + 整个 `Header` 子组件. ProjectTabs tab bar (`PLANS specCount · taskCount` / `ASKS askCount`) 已承担 section 标识 + 计数职责, 避免 tab 下方紧接一行视觉上几乎相同的文字.
+- **沙盒滚动 → 整页滚动**: 删 `ProjectTabs` 容器 `h-[calc(100vh-9rem)] min-h-[20rem]`, 删 `SpecsView` / `AsksView` 的 `<section h-full flex flex-col>` 和内层 `flex-1 min-h-0 overflow-y-auto overflow-x-hidden`. 内容自然伸展, `window` 接管 Y 滚动. ChainGraph 自身的 `overflow-x-auto` 横滚不受影响.
+- **mobile scroll-aware 自动隐藏**: 新增 `lib/useScrollDirection.ts` (window scroll 监听 + rAF throttle, scrollY > 60 且 down → `hidden=true`, up 立即 `false`). Dashboard 顶栏与 ProjectTabs tab bar 在 mobile scroll-down 时同步 `-translate-y-full` 隐藏, scroll-up 立即回显, 释放垂直可视空间. 桌面端 `sm:translate-y-0` 永远显示, 行为不变.
+- **mobile 紧凑布局**: Dashboard `<header>` 高度 `h-14` → `h-12 sm:h-14`; `<main>` padding `px-4 py-6` → `px-3 py-3 sm:px-4 sm:py-6`; ProjectTabs tab bar `gap-6 py-2` → `gap-4 py-1.5 sm:gap-6 sm:py-2`; tab 计数 mobile 简写 `N · M`, 桌面完整 `N specs · M tasks`.
+- **tab bar sticky**: tab bar 加 `sticky top-12 sm:top-14 z-10 bg-zinc-950/90 backdrop-blur` 让其在 window 滚动时贴在顶栏下方, 与顶栏一起 scroll-aware hide. z-index 调整: header z-20 > tab bar z-10 > 内容.
+
+### Notes
+
+- 零 BREAKING. CLI / Worker / Schema / API 零变化. 桌面端布局变化: 内容区不再固定高度沙盒, 长 chain / 多 chain 由整页 scroll 承载, 与 mobile 一致.
+
 ## [0.8.7] - 2026-05-15
 
 ### Changed

@@ -30,8 +30,7 @@ export default function AsksView({ asks, onEdit, onDelete }: Props) {
 
   if (asks === null) {
     return (
-      <section className="h-full flex flex-col space-y-3">
-        <Header total={null} standalone={0} chains={0} />
+      <section>
         <div className="text-xs text-zinc-500">loading…</div>
       </section>
     );
@@ -39,78 +38,45 @@ export default function AsksView({ asks, onEdit, onDelete }: Props) {
 
   const isEmpty = standalones.length === 0 && chains.length === 0;
 
-  return (
-    <section className="h-full flex flex-col space-y-3">
-      <Header
-        total={asks.length}
-        standalone={standalones.length}
-        chains={chains.length}
-      />
-      {isEmpty ? (
+  if (isEmpty) {
+    return (
+      <section>
         <div className="text-sm text-zinc-400 italic px-4 py-8 text-center">
           (no asks)
         </div>
-      ) : (
-        <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden pr-1 space-y-4">
-          {standalones.length > 0 && (
-            <div className="grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(22rem,1fr))]">
-              {standalones.map((ask) => (
-                <AskCard
-                  key={ask.id}
-                  ask={ask}
-                  onEdit={() => onEdit(ask)}
-                  onDelete={() => onDelete(ask)}
-                />
-              ))}
-            </div>
-          )}
-          {chains.length > 0 && (
-            <ChainGraph
-              chains={chains}
-              renderNode={(ask) => (
-                <div className="w-[22rem] shrink-0">
-                  <AskCard
-                    ask={ask}
-                    onEdit={() => onEdit(ask)}
-                    onDelete={() => onDelete(ask)}
-                  />
-                </div>
-              )}
+      </section>
+    );
+  }
+
+  return (
+    <section className="space-y-4">
+      {standalones.length > 0 && (
+        <div className="grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(22rem,1fr))]">
+          {standalones.map((ask) => (
+            <AskCard
+              key={ask.id}
+              ask={ask}
+              onEdit={() => onEdit(ask)}
+              onDelete={() => onDelete(ask)}
             />
-          )}
+          ))}
         </div>
       )}
-    </section>
-  );
-}
-
-function Header({
-  total,
-  standalone,
-  chains,
-}: {
-  total: number | null;
-  standalone: number;
-  chains: number;
-}) {
-  return (
-    <div className="flex items-baseline gap-3 flex-wrap">
-      <h3 className="text-sm font-semibold uppercase tracking-wider text-zinc-300">
-        asks
-      </h3>
-      {total !== null && (
-        <span className="text-[11px] text-zinc-500">
-          {total} {total === 1 ? 'ask' : 'asks'}
-          {standalone > 0 && chains > 0 && (
-            <>
-              {' · '}
-              {standalone} standalone {' · '}
-              {chains} {chains === 1 ? 'chain' : 'chains'}
-            </>
+      {chains.length > 0 && (
+        <ChainGraph
+          chains={chains}
+          renderNode={(ask) => (
+            <div className="w-[22rem] shrink-0">
+              <AskCard
+                ask={ask}
+                onEdit={() => onEdit(ask)}
+                onDelete={() => onDelete(ask)}
+              />
+            </div>
           )}
-        </span>
+        />
       )}
-    </div>
+    </section>
   );
 }
 
