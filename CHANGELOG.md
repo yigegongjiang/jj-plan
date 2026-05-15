@@ -2,6 +2,16 @@
 
 本文件记录 jjplan 的版本变更, 格式参考 [Keep a Changelog](https://keepachangelog.com).
 
+## [0.8.16] - 2026-05-16
+
+### Changed
+
+- **AskCard footer 与其他卡片对齐**: 删除 `AsksView.AskCard` footer 里独占一行的 `ask.id` (ULID), 仅保留 `updated {time}`. 根因 = 历史遗留, ProjectsList/SpecsView.SpecNode/SpecDetail.TaskNode/TaskItem 都不展示 id, 只有 AskCard 露出 — ULID 对人无意义、对 AI 经 `jjask` CLI 拿, UI 无需展示. 同步把 time 样式从 `text-[10px] text-zinc-500` 提到 `text-[11px] text-zinc-400 font-mono` 并加 `updated ` 前缀, 跟 ProjectsList footer 完全一致.
+
+### Notes
+
+- 零 BREAKING. CLI / Worker / Schema / API 零变化, 纯 UI.
+
 ## [0.8.15] - 2026-05-16
 
 ### Fixed

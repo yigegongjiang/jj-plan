@@ -123,17 +123,9 @@ function AskCard({
         </details>
       )}
       <div className="mt-auto pt-1.5 flex items-center justify-between gap-2 border-t border-zinc-900">
-        <div className="flex flex-col min-w-0">
-          <span
-            className="text-[10px] font-mono text-zinc-500 truncate"
-            title={ask.id}
-          >
-            {ask.id}
-          </span>
-          <span className="text-[10px] font-mono text-zinc-500">
-            {fmtTime(ask.updated_at)}
-          </span>
-        </div>
+        <span className="text-[11px] text-zinc-400 font-mono truncate">
+          updated {fmtTime(ask.updated_at)}
+        </span>
         <div className="flex items-center gap-0.5 shrink-0">
           <button
             onClick={onEdit}
