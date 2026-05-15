@@ -427,7 +427,7 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen">
-      <header className="fixed top-0 inset-x-0 z-30 bg-zinc-950/70 backdrop-blur border-b border-zinc-800 pt-[env(safe-area-inset-top)]">
+      <header className="bg-zinc-950 border-b border-zinc-800 pt-[env(safe-area-inset-top)]">
         <div className="px-3 sm:px-4 h-12 sm:h-14 flex items-center gap-3">
           <Breadcrumb route={route} activeSpecTitle={activeSpec?.title} onNavigate={navigate} />
           {loading && projects === null && (
@@ -436,7 +436,7 @@ export default function Dashboard() {
         </div>
       </header>
 
-      <main className="px-3 sm:px-4 pt-[calc(env(safe-area-inset-top)+3.75rem)] sm:pt-[calc(env(safe-area-inset-top)+5rem)] pb-3 sm:pb-6 space-y-4">
+      <main className="px-3 sm:px-4 py-3 sm:py-6 space-y-4">
         {error && (
           <div className="px-4 py-2.5 rounded-md border border-red-900 bg-red-950/40 text-red-300 text-sm flex items-start justify-between gap-4">
             <span className="break-all">{error}</span>

@@ -40,7 +40,7 @@ export default function ProjectTabs({
     <div className="flex flex-col">
       <div
         role="tablist"
-        className="fixed top-[calc(env(safe-area-inset-top)+3rem)] sm:top-[calc(env(safe-area-inset-top)+3.5rem)] inset-x-0 z-20 px-3 sm:px-4 h-10 sm:h-11 flex items-center gap-4 sm:gap-6 border-b border-zinc-800 bg-zinc-950/70 backdrop-blur"
+        className="-mx-3 sm:-mx-4 px-3 sm:px-4 flex items-center gap-4 sm:gap-6 border-b border-zinc-800"
       >
         <TabButton
           active={tab === 'plans'}
@@ -57,9 +57,7 @@ export default function ProjectTabs({
           fullCounts={`${askCount}`}
         />
       </div>
-      <div className="pt-[calc(2.5rem+0.75rem)] sm:pt-[calc(2.75rem+1rem)]">
-        {tab === 'plans' ? plans : asks}
-      </div>
+      <div className="pt-3">{tab === 'plans' ? plans : asks}</div>
     </div>
   );
 }

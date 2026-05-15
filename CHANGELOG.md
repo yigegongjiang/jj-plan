@@ -2,6 +2,18 @@
 
 本文件记录 jjplan 的版本变更, 格式参考 [Keep a Changelog](https://keepachangelog.com).
 
+## [0.8.13] - 2026-05-16
+
+### Changed
+
+- **彻底 normal flow scroll, 撤销 0.8.10/0.8.11/0.8.12 所有 fixed/sticky 设计**: 用户需求 = header / tab bar 都不固定, 跟内容一起 scroll up 滚出 viewport, main 内容直达屏幕顶部 (status bar 下方). 3 处改动 — (1) `Dashboard.tsx` `<header>` 维持 normal flow `bg-zinc-950 border-b pt-[env(safe-area-inset-top)]` (撤回 0.8.12 的 fixed + backdrop-blur); (2) `Dashboard.tsx` `<main>` 撤回 0.8.12 的 padding-top, 改回 `py-3 sm:py-6` (无任何 top spacer/offset, 紧贴 header 之后 normal flow); (3) `ProjectTabs.tsx` tablist 从 `fixed top:[…]` 改为纯 normal flow (`-mx-3 sm:-mx-4 px-3 sm:px-4 flex … border-b`), 移除 sticky/fixed/backdrop-blur/h-10 显式高度/z-index, content wrapper 改回 `pt-3`.
+
+### Notes
+
+- 零 BREAKING. CLI / Worker / Schema / API 零变化.
+- 这是最朴素的 normal flow scroll 模式: scroll up 时 header → tab bar → 内容依次滚出 viewport top. viewport-fit=cover 让 webview 含 status bar 区域, main 内容滚到 viewport top:0 时自然进入 status bar 下方 (immersive).
+- 失去的便利: scroll-up 不再 reveal header/tab bar (无 sticky/fixed). 要切 tab 或看 breadcrumb 需 scroll 到顶部. 这正是用户期望的纯净行为.
+
 ## [0.8.12] - 2026-05-16
 
 ### Fixed
