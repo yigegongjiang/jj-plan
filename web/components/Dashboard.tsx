@@ -21,6 +21,7 @@ import EditDialog, { type EditDraft } from './EditDialog';
 import ProjectsList from './ProjectsList';
 import SpecDetail from './SpecDetail';
 import SpecsView from './SpecsView';
+import SplitPane from './SplitPane';
 
 const STORAGE_KEY = 'jjplan_token';
 
@@ -471,38 +472,42 @@ export default function Dashboard() {
             }}
           />
         ) : route.kind === 'project' && activeProject ? (
-          <div className="space-y-6">
-            <AsksView
-              asks={asksProject === activeProject.name ? asks : null}
-              onEdit={(ask) => {
-                setEditError(null);
-                setEdit({ kind: 'ask', ask });
-              }}
-              onDelete={(ask) => setDel({ kind: 'ask', id: ask.id })}
-            />
-            <SpecsView
-              project={activeProject}
-              onOpenSpec={(specId) =>
-                navigate({
-                  kind: 'spec',
-                  project: activeProject.name,
-                  specId,
-                })
-              }
-              onEditSpec={(spec) => {
-                setEditError(null);
-                setEdit({ kind: 'spec', spec });
-              }}
-              onDeleteSpec={(spec) =>
-                setDel({
-                  kind: 'spec',
-                  id: spec.id,
-                  title: spec.title,
-                  taskCount: spec.tasks.length,
-                })
-              }
-            />
-          </div>
+          <SplitPane
+            top={
+              <AsksView
+                asks={asksProject === activeProject.name ? asks : null}
+                onEdit={(ask) => {
+                  setEditError(null);
+                  setEdit({ kind: 'ask', ask });
+                }}
+                onDelete={(ask) => setDel({ kind: 'ask', id: ask.id })}
+              />
+            }
+            bottom={
+              <SpecsView
+                project={activeProject}
+                onOpenSpec={(specId) =>
+                  navigate({
+                    kind: 'spec',
+                    project: activeProject.name,
+                    specId,
+                  })
+                }
+                onEditSpec={(spec) => {
+                  setEditError(null);
+                  setEdit({ kind: 'spec', spec });
+                }}
+                onDeleteSpec={(spec) =>
+                  setDel({
+                    kind: 'spec',
+                    id: spec.id,
+                    title: spec.title,
+                    taskCount: spec.tasks.length,
+                  })
+                }
+              />
+            }
+          />
         ) : route.kind === 'spec' && activeSpec ? (
           <SpecDetail
             spec={activeSpec}

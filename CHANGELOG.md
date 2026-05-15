@@ -2,6 +2,19 @@
 
 本文件记录 jjplan 的版本变更, 格式参考 [Keep a Changelog](https://keepachangelog.com).
 
+## [0.8.2] - 2026-05-15
+
+### Changed
+
+- Web project 页改为 ASKS / PLANS 上下可拖动分割布局: 新增 `SplitPane` 组件, 默认 50/50, 用户拖动横条调整比例 (clamp 10%-90%), 双击横条重置 50/50. 比例持久化到 `localStorage` (key `jjplan_split_ratio`), 刷新页面沿用上次值.
+- 去掉 0.8.1 引入的 ASKS `max-h: 28rem` 固定限高, 改由 SplitPane 控制. ASKS / PLANS 内部各自独立纵向滚动, 不再触发 main 整页滚动.
+- 拖动时 `document.body` 临时锁 `user-select: none` + `cursor: row-resize`, 避免选中文本与光标抖动.
+
+### Notes
+
+- 零 BREAKING. API / 数据模型 / ChainGraph / AskCard / SpecNode 不变.
+- 容器高度用 `calc(100vh - 9rem)` 减去 header (3.5rem) 与 main padding (3rem) 与余量, 设 `min-h: 20rem` 防止极小窗口下塌陷.
+
 ## [0.8.1] - 2026-05-15
 
 ### Changed

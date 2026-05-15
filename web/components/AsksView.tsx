@@ -30,7 +30,7 @@ export default function AsksView({ asks, onEdit, onDelete }: Props) {
 
   if (asks === null) {
     return (
-      <section className="space-y-3">
+      <section className="h-full flex flex-col space-y-3">
         <Header total={null} standalone={0} chains={0} />
         <div className="text-xs text-zinc-500">loading…</div>
       </section>
@@ -40,7 +40,7 @@ export default function AsksView({ asks, onEdit, onDelete }: Props) {
   const isEmpty = standalones.length === 0 && chains.length === 0;
 
   return (
-    <section className="space-y-3">
+    <section className="h-full flex flex-col space-y-3">
       <Header
         total={asks.length}
         standalone={standalones.length}
@@ -51,7 +51,7 @@ export default function AsksView({ asks, onEdit, onDelete }: Props) {
           (no asks)
         </div>
       ) : (
-        <div className="max-h-[28rem] overflow-y-auto overflow-x-hidden pr-1 space-y-4">
+        <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden pr-1 space-y-4">
           {standalones.length > 0 && (
             <div className="grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(22rem,1fr))]">
               {standalones.map((ask) => (
