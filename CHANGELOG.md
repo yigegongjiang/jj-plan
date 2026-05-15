@@ -2,6 +2,18 @@
 
 本文件记录 jjplan 的版本变更, 格式参考 [Keep a Changelog](https://keepachangelog.com).
 
+## [0.8.6] - 2026-05-15
+
+### Changed
+
+- Web project 页 ASKS / PLANS 区由 `SplitPane` 上下拖拽分割改为 **Tab 切换**: 顶部 tab bar 两枚 `PLANS N specs · M tasks` / `ASKS K`, 选中项以 `border-b-2 border-zinc-100` + `font-semibold` 强调, 未选中 `text-zinc-500 hover:text-zinc-300`. 单区块独占内容区高度 (`h-[calc(100vh-9rem)]` 减 tab bar), 解决原 SplitPane 单区最多 90% 的占比受限问题.
+- 默认 tab = `PLANS` (jjplan 核心产物), 用户选择持久化到 `localStorage('jjplan_project_tab')`, 值 `plans` | `asks`, 与既有 `jjplan_token` / `jjplan_project_tab` 模式一致.
+- 新增 `web/components/ProjectTabs.tsx` (受控 tab 容器 + 计数徽标 + 持久化), 删除 `web/components/SplitPane.tsx` (无其它引用).
+
+### Notes
+
+- 零 BREAKING. CLI / Worker / Schema / API 零变化. 旧 localStorage key `jjplan_split_ratio` 不主动清理 (无副作用, 用户清浏览器即可).
+
 ## [0.8.5] - 2026-05-15
 
 ### Changed

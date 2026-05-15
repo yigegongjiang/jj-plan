@@ -20,8 +20,8 @@ import ConfirmDialog from './ConfirmDialog';
 import EditDialog, { type EditDraft } from './EditDialog';
 import ProjectsList from './ProjectsList';
 import SpecDetail from './SpecDetail';
+import ProjectTabs from './ProjectTabs';
 import SpecsView from './SpecsView';
-import SplitPane from './SplitPane';
 
 const STORAGE_KEY = 'jjplan_token';
 
@@ -472,8 +472,16 @@ export default function Dashboard() {
             }}
           />
         ) : route.kind === 'project' && activeProject ? (
-          <SplitPane
-            top={
+          <ProjectTabs
+            askCount={
+              asksProject === activeProject.name ? (asks?.length ?? 0) : 0
+            }
+            specCount={activeProject.specs.length}
+            taskCount={activeProject.specs.reduce(
+              (n, s) => n + s.tasks.length,
+              0,
+            )}
+            asks={
               <AsksView
                 asks={asksProject === activeProject.name ? asks : null}
                 onEdit={(ask) => {
@@ -483,7 +491,7 @@ export default function Dashboard() {
                 onDelete={(ask) => setDel({ kind: 'ask', id: ask.id })}
               />
             }
-            bottom={
+            plans={
               <SpecsView
                 project={activeProject}
                 onOpenSpec={(specId) =>
