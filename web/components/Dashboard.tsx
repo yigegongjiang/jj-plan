@@ -19,6 +19,7 @@ import AsksView from './AsksView';
 import ConfirmDialog from './ConfirmDialog';
 import EditDialog, { type EditDraft } from './EditDialog';
 import ProjectsList from './ProjectsList';
+import RenameProjectDialog from './RenameProjectDialog';
 import SpecDetail from './SpecDetail';
 import ProjectTabs from './ProjectTabs';
 import SpecsView from './SpecsView';
@@ -79,6 +80,8 @@ export default function Dashboard() {
   const [edit, setEdit] = useState<EditTarget | null>(null);
   const [editError, setEditError] = useState<string | null>(null);
   const [del, setDel] = useState<DeleteTarget | null>(null);
+  const [rename, setRename] = useState<Project | null>(null);
+  const [renameError, setRenameError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [route, setRoute] = useState<Route>({ kind: 'home' });
   // Asks lazy-loaded per active project; reset on navigation to avoid stale flashes.
@@ -137,6 +140,8 @@ export default function Dashboard() {
     setProjects(null);
     setEdit(null);
     setDel(null);
+    setRename(null);
+    setRenameError(null);
     setAsks(null);
     setAsksProject(null);
   }, []);
@@ -344,6 +349,37 @@ export default function Dashboard() {
     }
   }
 
+  async function submitRename(newName: string) {
+    if (!rename) return;
+    const oldName = rename.name;
+    setBusy(true);
+    setRenameError(null);
+    try {
+      await api.renameProject(token, oldName, newName);
+      // Local state is unreliable after a merge (two projects fold into one);
+      // drop the cached projects list and force a refetch instead of trying
+      // to splice the result in-place.
+      await load(token, true);
+      if (route.kind !== 'home' && route.project === oldName) {
+        if (route.kind === 'project') {
+          navigate({ kind: 'project', project: newName });
+        } else {
+          navigate({ kind: 'spec', project: newName, specId: route.specId });
+        }
+      }
+      setRename(null);
+    } catch (e) {
+      const err = e as ApiError;
+      if (err.status === 401) {
+        fallbackToLogin();
+      } else {
+        setRenameError(err.message);
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function confirmDelete() {
     if (!del) return;
     setBusy(true);
@@ -479,6 +515,10 @@ export default function Dashboard() {
           <ProjectsList
             projects={projects}
             onOpen={(name) => navigate({ kind: 'project', project: name })}
+            onRename={(p) => {
+              setRenameError(null);
+              setRename(p);
+            }}
             onDelete={(p) => {
               const taskCount = p.specs.reduce(
                 (n, s) => n + s.tasks.length,
@@ -607,6 +647,22 @@ export default function Dashboard() {
             if (!busy) {
               setEdit(null);
               setEditError(null);
+            }
+          }}
+        />
+      )}
+
+      {rename && projects && (
+        <RenameProjectDialog
+          project={rename}
+          existingNames={projects.map((p) => p.name)}
+          busy={busy}
+          errorMessage={renameError}
+          onSubmit={submitRename}
+          onCancel={() => {
+            if (!busy) {
+              setRename(null);
+              setRenameError(null);
             }
           }}
         />

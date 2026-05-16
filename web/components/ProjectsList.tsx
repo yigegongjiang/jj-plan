@@ -6,10 +6,11 @@ import type { Project } from '@/lib/types';
 interface Props {
   projects: Project[];
   onOpen: (name: string) => void;
+  onRename: (project: Project) => void;
   onDelete: (project: Project) => void;
 }
 
-export default function ProjectsList({ projects, onOpen, onDelete }: Props) {
+export default function ProjectsList({ projects, onOpen, onRename, onDelete }: Props) {
   if (projects.length === 0) {
     return (
       <div className="text-center text-zinc-500 py-16 text-sm">
@@ -41,24 +42,44 @@ export default function ProjectsList({ projects, onOpen, onDelete }: Props) {
               <span className="text-[11px] text-zinc-400 font-mono truncate">
                 updated {fmtTime(p.updated_at)}
               </span>
-              <span
-                role="button"
-                tabIndex={0}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onDelete(p);
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
+              <div className="flex items-center gap-1 shrink-0">
+                <span
+                  role="button"
+                  tabIndex={0}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onRename(p);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.stopPropagation();
+                      onRename(p);
+                    }
+                  }}
+                  className="px-2 py-0.5 text-[11px] rounded text-zinc-500 hover:text-blue-400 hover:bg-blue-950/40 transition cursor-pointer"
+                  aria-label={`rename project ${p.name}`}
+                >
+                  rename
+                </span>
+                <span
+                  role="button"
+                  tabIndex={0}
+                  onClick={(e) => {
                     e.stopPropagation();
                     onDelete(p);
-                  }
-                }}
-                className="shrink-0 px-2 py-0.5 text-[11px] rounded text-zinc-500 hover:text-red-400 hover:bg-red-950/40 transition cursor-pointer"
-                aria-label={`delete project ${p.name}`}
-              >
-                delete
-              </span>
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.stopPropagation();
+                      onDelete(p);
+                    }
+                  }}
+                  className="px-2 py-0.5 text-[11px] rounded text-zinc-500 hover:text-red-400 hover:bg-red-950/40 transition cursor-pointer"
+                  aria-label={`delete project ${p.name}`}
+                >
+                  delete
+                </span>
+              </div>
             </div>
           </button>
         );

@@ -406,6 +406,93 @@ app.delete('/projects/:name', async (c) => {
   return c.body(null, 204);
 });
 
+// Rename a project, or merge it into an existing target.
+//
+// The project's "id" is its name (primary key), so renaming means migrating
+// every child row that references it. specs.project_id and asks.project_id
+// both point at projects.name with ON DELETE CASCADE — but we must move the
+// children BEFORE deleting the old row, otherwise the cascade wipes them.
+//
+// Two paths depending on whether the target name already exists:
+//
+//   rename (target absent):
+//     1. INSERT new project row, inheriting old's created_at; updated_at = ts
+//     2. UPDATE specs.project_id = new WHERE project_id = old
+//     3. UPDATE asks.project_id  = new WHERE project_id = old
+//     4. DELETE old project row
+//
+//   merge (target present):
+//     1. UPDATE specs.project_id = target WHERE project_id = old
+//     2. UPDATE asks.project_id  = target WHERE project_id = old
+//     3. UPDATE projects SET updated_at = ts WHERE name = target
+//     4. DELETE old project row
+//
+// Merge safety relies on three schema facts:
+//   - specs.id / asks.id are ULIDs (globally unique) — no PK clash when child
+//     rows land in the target project.
+//   - uq_specs_succ / uq_asks_succ are partial unique indexes on prev_id
+//     WHERE prev_id IS NOT NULL; ULID uniqueness means no two chains can
+//     share a prev_id, so the indexes cannot trip on merge.
+//   - Multiple heads (prev_id IS NULL) per project are already legal; the
+//     reader (orderSpecs) handles multi-head projects.
+//
+// tasks.spec_id is untouched — task chains belong to their spec, which keeps
+// its id through the move.
+app.patch('/projects/:name', async (c) => {
+  const oldName = c.req.param('name');
+
+  const parsedBody = await parseJsonBody<{ new_name?: unknown }>(c);
+  if (!parsedBody.ok) return parsedBody.response;
+  const raw = parsedBody.value.new_name;
+  if (typeof raw !== 'string') return c.json({ error: 'new_name must be string' }, 400);
+  if (raw.length === 0 || raw.length > MAX_PROJECT_NAME_LEN) {
+    return c.json({ error: `new_name length must be 1..${MAX_PROJECT_NAME_LEN}` }, 400);
+  }
+  const newName = raw;
+  if (newName === oldName) {
+    return c.json({ error: 'new_name must differ from current name' }, 400);
+  }
+
+  const oldProject = await readProject(c.env.DB, oldName);
+  if (!oldProject) return c.json({ error: 'project not found' }, 404);
+
+  const target = await readProject(c.env.DB, newName);
+  const ts = now();
+
+  if (target) {
+    // merge: target already exists, fold old's children into it
+    await c.env.DB.batch([
+      c.env.DB
+        .prepare('UPDATE specs SET project_id = ? WHERE project_id = ?')
+        .bind(newName, oldName),
+      c.env.DB
+        .prepare('UPDATE asks SET project_id = ? WHERE project_id = ?')
+        .bind(newName, oldName),
+      c.env.DB
+        .prepare('UPDATE projects SET updated_at = ? WHERE name = ?')
+        .bind(ts, newName),
+      c.env.DB.prepare('DELETE FROM projects WHERE name = ?').bind(oldName),
+    ]);
+  } else {
+    // rename: stand up the new row first so the FK target exists before we
+    // repoint children, then drop the old row.
+    await c.env.DB.batch([
+      c.env.DB
+        .prepare('INSERT INTO projects (name, created_at, updated_at) VALUES (?, ?, ?)')
+        .bind(newName, oldProject.created_at, ts),
+      c.env.DB
+        .prepare('UPDATE specs SET project_id = ? WHERE project_id = ?')
+        .bind(newName, oldName),
+      c.env.DB
+        .prepare('UPDATE asks SET project_id = ? WHERE project_id = ?')
+        .bind(newName, oldName),
+      c.env.DB.prepare('DELETE FROM projects WHERE name = ?').bind(oldName),
+    ]);
+  }
+
+  return c.json(await readProject(c.env.DB, newName));
+});
+
 // ---------- specs ----------
 
 app.get('/specs/:id', async (c) => {

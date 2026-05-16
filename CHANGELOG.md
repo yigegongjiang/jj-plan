@@ -2,6 +2,19 @@
 
 本文件记录 jjplan 的版本变更, 格式参考 [Keep a Changelog](https://keepachangelog.com).
 
+## [0.8.18] - 2026-05-16
+
+### Added
+
+- **Project 改名入口 (含合并语义)**: Dashboard 首页 `ProjectsList` 卡片 footer 在 `delete` 旁加 `rename` 入口, 点击弹出 `RenameProjectDialog` 单 input 对话框. 目标 name 不存在 → rename (改名); 目标 name 已命中现有 project → 对话框文案与按钮配色切到橙色 "merge" 模式, 提示两个 project 的 spec / task / ask 全部合并到目标, 此操作不可撤销. 解决场景: AI 经 `jjplan` / `jjask` 提交时把 project name 传错 (cwd basename 偶尔被改写), 之前只能 CLI 手动迁移, 现在 web 端直接纠正.
+- Worker 新增 `PATCH /projects/:name` body `{ new_name: string }`. rename 路径: 单 D1 batch 中 `INSERT 新 project (复用旧 created_at, updated_at=ts)` → `UPDATE specs.project_id` → `UPDATE asks.project_id` → `DELETE 旧 project`. merge 路径: `UPDATE specs.project_id` → `UPDATE asks.project_id` → `UPDATE target.updated_at` → `DELETE 旧 project`. 合并安全性依赖三点 schema 事实 — `specs.id` / `asks.id` 是 ULID 全局唯一 (跨项目不撞 PK), `uq_specs_succ` / `uq_asks_succ` 是 partial unique index (`prev_id IS NOT NULL`) 且 ULID 唯一保证 prev_id 不撞, 多 head (`prev_id IS NULL`) 在 schema 中合法且 `orderSpecs` 已支持. tasks 经 `spec_id` 间接归属, 不动. 校验: `new_name` 必须 string, 长度 1..128, 不等于当前 name; 旧 name 不存在 → 404.
+- Worker 测试 +14: PATCH 全路径覆盖 (rename / merge / 各类 400 / 404 / 链结构保留).
+- Web `api.renameProject` + `types.MAX_PROJECT_NAME_LEN=128`. 改名成功后若当前 route 仍指向旧 name, 自动 `navigate` 到新 name 对应路由 (`project` / `spec`), 并触发一次 silent reload 替代本地 splice (合并后两条链折叠成一项, 本地拼接复杂度收益不划算).
+
+### Notes
+
+- 零 BREAKING. CLI 不加 rename 命令 (本次仅 web 入口). 不改 schema, 不引入 `ON UPDATE CASCADE`. 并发写孤儿 (rename / merge 过程中另一客户端正向旧 name 写入) 是已知低概率边界, 不处理.
+
 ## [0.8.17] - 2026-05-16
 
 ### Fixed

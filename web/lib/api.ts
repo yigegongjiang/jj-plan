@@ -78,6 +78,11 @@ export const api = {
   deleteProject: (t: string, name: string) =>
     request<null>(t, 'DELETE', `/projects/${encodeURIComponent(name)}`),
 
+  renameProject: (t: string, oldName: string, newName: string) =>
+    request<Project>(t, 'PATCH', `/projects/${encodeURIComponent(oldName)}`, {
+      new_name: newName,
+    }),
+
   patchSpec: (t: string, id: string, body: SpecPatch) =>
     request<Spec>(t, 'PATCH', `/specs/${encodeURIComponent(id)}`, body),
 

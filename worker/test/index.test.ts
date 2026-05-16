@@ -249,6 +249,7 @@ describe('auth', () => {
     { method: 'GET', path: '/projects', hasBody: false },
     { method: 'GET', path: '/projects/anything/specs', hasBody: false },
     { method: 'POST', path: '/projects/anything/specs', hasBody: true },
+    { method: 'PATCH', path: '/projects/anything', hasBody: true },
     { method: 'DELETE', path: '/projects/anything', hasBody: false },
     { method: 'GET', path: '/specs/anything', hasBody: false },
     { method: 'PATCH', path: '/specs/anything', hasBody: true },
@@ -1926,5 +1927,148 @@ describe('asks cascade', () => {
     expect(await rowCount('asks')).toBe(1);
     await authed(`/specs/${s.id}`, { method: 'DELETE' });
     expect(await rowCount('asks')).toBe(1);
+  });
+});
+
+// =============================================================================
+// PATCH /projects/:name — rename + merge
+// =============================================================================
+
+describe('PATCH /projects/:name', () => {
+  it('404 when source project does not exist', async () => {
+    const r = await jsonReq('/projects/missing', 'PATCH', { new_name: 'something' });
+    expect(r.status).toBe(404);
+    expect((await r.json()).error).toBe('project not found');
+  });
+
+  it('400 on invalid JSON body', async () => {
+    await newSpec({ title: 'A' }, 'P1');
+    const r = await authed('/projects/P1', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: 'not json',
+    });
+    expect(r.status).toBe(400);
+  });
+
+  it('400 when new_name is missing', async () => {
+    await newSpec({ title: 'A' }, 'P1');
+    const r = await jsonReq('/projects/P1', 'PATCH', {});
+    expect(r.status).toBe(400);
+    expect((await r.json()).error).toBe('new_name must be string');
+  });
+
+  it('400 when new_name is not a string', async () => {
+    await newSpec({ title: 'A' }, 'P1');
+    const r = await jsonReq('/projects/P1', 'PATCH', { new_name: 42 });
+    expect(r.status).toBe(400);
+    expect((await r.json()).error).toBe('new_name must be string');
+  });
+
+  it('400 when new_name is empty', async () => {
+    await newSpec({ title: 'A' }, 'P1');
+    const r = await jsonReq('/projects/P1', 'PATCH', { new_name: '' });
+    expect(r.status).toBe(400);
+    expect((await r.json()).error).toContain('new_name length');
+  });
+
+  it('400 when new_name exceeds 128 chars', async () => {
+    await newSpec({ title: 'A' }, 'P1');
+    const r = await jsonReq('/projects/P1', 'PATCH', { new_name: 'x'.repeat(129) });
+    expect(r.status).toBe(400);
+    expect((await r.json()).error).toContain('new_name length');
+  });
+
+  it('400 when new_name equals current name', async () => {
+    await newSpec({ title: 'A' }, 'P1');
+    const r = await jsonReq('/projects/P1', 'PATCH', { new_name: 'P1' });
+    expect(r.status).toBe(400);
+    expect((await r.json()).error).toContain('differ');
+  });
+
+  it('rename (target absent) moves project name, preserves created_at, bumps updated_at', async () => {
+    const seed = await newSpec({ title: 'A' }, 'old');
+    const before = (await listProjects()).find((p) => p.name === 'old')!;
+    await tick();
+
+    const r = await jsonReq('/projects/old', 'PATCH', { new_name: 'fresh' });
+    expect(r.status).toBe(200);
+    const body = await r.json();
+    expect(body.name).toBe('fresh');
+    expect(body.created_at).toBe(before.created_at);
+    expect(body.updated_at).toBeGreaterThan(before.updated_at);
+
+    const projects = await listProjects();
+    expect(projects.map((p) => p.name).sort()).toEqual(['fresh']);
+
+    // children rebound to new name
+    const fresh = projects.find((p) => p.name === 'fresh')!;
+    expect(fresh.specs.map((s) => s.id)).toEqual([seed.id]);
+
+    // tasks come along (via spec_id, no direct project link)
+    const t = await newTask(seed.id, { title: 't1' });
+    const after = await listProjects();
+    expect(after.find((p) => p.name === 'fresh')?.specs[0]?.tasks.map((x) => x.id)).toEqual([t.id]);
+  });
+
+  it('rename migrates asks alongside specs', async () => {
+    await newSpec({ title: 'A' }, 'old');
+    const a1 = await newAsk({ body: 'q1' }, 'old');
+    const a2 = await newAsk({ body: 'q2', prev_id: a1.id }, 'old');
+
+    const r = await jsonReq('/projects/old', 'PATCH', { new_name: 'fresh' });
+    expect(r.status).toBe(200);
+
+    const asks = await listAsks('fresh');
+    expect(asks.map((a) => a.id).sort()).toEqual([a1.id, a2.id].sort());
+    // chain still intact: a2.prev_id should still point at a1
+    const a2Reloaded = asks.find((a) => a.id === a2.id)!;
+    expect(a2Reloaded.prev_id).toBe(a1.id);
+  });
+
+  it('merge (target exists) folds source specs/asks into target', async () => {
+    const sOld = await newSpec({ title: 'from-old' }, 'old');
+    const askOld = await newAsk({ body: 'old-q' }, 'old');
+    await tick();
+    const sNew = await newSpec({ title: 'from-target' }, 'target');
+    const askNew = await newAsk({ body: 'target-q' }, 'target');
+    const targetBefore = (await listProjects()).find((p) => p.name === 'target')!;
+    await tick();
+
+    const r = await jsonReq('/projects/old', 'PATCH', { new_name: 'target' });
+    expect(r.status).toBe(200);
+    const body = await r.json();
+    expect(body.name).toBe('target');
+    expect(body.created_at).toBe(targetBefore.created_at);
+    expect(body.updated_at).toBeGreaterThan(targetBefore.updated_at);
+
+    const projects = await listProjects();
+    expect(projects.map((p) => p.name).sort()).toEqual(['target']);
+
+    const target = projects.find((p) => p.name === 'target')!;
+    expect(target.specs.map((s) => s.id).sort()).toEqual([sOld.id, sNew.id].sort());
+
+    const asks = await listAsks('target');
+    expect(asks.map((a) => a.id).sort()).toEqual([askOld.id, askNew.id].sort());
+  });
+
+  it('merge preserves task chains under their original specs', async () => {
+    const sOld = await newSpec({ title: 'so' }, 'old');
+    const toldA = await newTask(sOld.id, { title: 'to-a' });
+    await tick();
+    const toldB = await newTask(sOld.id, { title: 'to-b' });
+    const sNew = await newSpec({ title: 'sn' }, 'target');
+    const tnewA = await newTask(sNew.id, { title: 'tn-a' });
+
+    const r = await jsonReq('/projects/old', 'PATCH', { new_name: 'target' });
+    expect(r.status).toBe(200);
+
+    const reloaded = await getSpec(sOld.id);
+    expect(reloaded.project_id).toBe('target');
+    expect(reloaded.tasks.map((t) => t.id)).toEqual([toldA.id, toldB.id]);
+
+    const reloadedNew = await getSpec(sNew.id);
+    expect(reloadedNew.project_id).toBe('target');
+    expect(reloadedNew.tasks.map((t) => t.id)).toEqual([tnewA.id]);
   });
 });

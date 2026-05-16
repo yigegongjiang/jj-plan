@@ -6,6 +6,7 @@ export type TaskStatus = (typeof TASK_STATUSES)[number];
 
 export const MAX_TITLE_LEN = 200;
 export const MAX_BODY_LEN = 65536;
+export const MAX_PROJECT_NAME_LEN = 128;
 
 export interface Task {
   id: string;
