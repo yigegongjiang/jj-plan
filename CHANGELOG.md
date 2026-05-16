@@ -2,6 +2,16 @@
 
 本文件记录 jjplan 的版本变更, 格式参考 [Keep a Changelog](https://keepachangelog.com).
 
+## [0.8.17] - 2026-05-16
+
+### Fixed
+
+- **SPA 自制路由 scroll restoration 缺失**: web 端是 Static Export SPA (`web/app/page.tsx` 唯一路由 + `Dashboard.tsx` 内 `useState<Route>` + `window.history.pushState` 自制视图切换), 浏览器不会自动归零/恢复 `scrollY`, 导致两个现象 — (1) `ProjectsList` 下滚后点项目进入 `ProjectTabs`/`SpecDetail`, 内容继承上一级 `scrollY`, 不从顶部渲染; (2) 后退时上一级 `scrollY` 不还原, 落到 0 或被 clamp 到 `maxScroll`. 根因 = 自制路由没有补齐 MPA 模式下浏览器免费给的 scroll 行为, 浏览器原生 `history.scrollRestoration = 'auto'` 也救不了 (前进时 scrollY 未归零 → 浏览器记录的 entry baseline 是上一级位置, 返回时按错误 baseline 恢复且错过 React re-render 时机). 修复 = `Dashboard.tsx` mount 时 `window.history.scrollRestoration = 'manual'` (cleanup 还原); `navigate()` 先 `replaceState({...current, scrollY: window.scrollY})` 把离开位置绑到当前 entry, 再 `pushState({scrollY: 0})` 推新 entry, 再 `window.scrollTo(0,0)`, 最后 `setRoute`; `popstate` handler 从 `e.state.scrollY` 读目标 Y, `setRoute(readRoute())` 后用双 `requestAnimationFrame` 等新视图 commit + layout 完成再 `window.scrollTo(0, target)` (单 rAF 会踩在 React concurrent 渲染前, 目标 Y 大于当前内容高度时被 clamp). 滚动容器 = window (commit 05e5169 撤所有 sticky/fixed 后 normal flow), 不引入新依赖, 不替换自制路由.
+
+### Notes
+
+- 零 BREAKING. CLI / Worker / Schema / API 零变化, 纯 `web/components/Dashboard.tsx` 改动. 首次直开 URL (hydrate 路径) 行为不变, `scrollY=0` 自然.
+
 ## [0.8.16] - 2026-05-16
 
 ### Changed

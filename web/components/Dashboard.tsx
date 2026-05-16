@@ -86,22 +86,43 @@ export default function Dashboard() {
   const [asksProject, setAsksProject] = useState<string | null>(null);
 
   // Hydrate from localStorage + URL once on mount.
+  // 自制 SPA 路由: 浏览器不会自动管 scrollY, 用 history.state 自己存,
+  // popstate 时双 rAF 等新视图 layout 完成再 scrollTo, 否则会被 clamp.
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const saved = window.localStorage.getItem(STORAGE_KEY);
     if (saved) setToken(saved);
     setRoute(readRoute());
     setHydrated(true);
-    const onPop = () => setRoute(readRoute());
+    const prevRestoration = window.history.scrollRestoration;
+    window.history.scrollRestoration = 'manual';
+    const onPop = (e: PopStateEvent) => {
+      const target =
+        (e.state as { scrollY?: number } | null)?.scrollY ?? 0;
+      setRoute(readRoute());
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => window.scrollTo(0, target));
+      });
+    };
     window.addEventListener('popstate', onPop);
-    return () => window.removeEventListener('popstate', onPop);
+    return () => {
+      window.removeEventListener('popstate', onPop);
+      window.history.scrollRestoration = prevRestoration;
+    };
   }, []);
 
   const navigate = useCallback((next: Route) => {
-    setRoute(next);
     if (typeof window !== 'undefined') {
-      window.history.pushState(null, '', routeToUrl(next));
+      // 当前 scrollY 写回当前 entry, popstate 回到这里时能读出来恢复.
+      const current = (window.history.state as object | null) ?? {};
+      window.history.replaceState(
+        { ...current, scrollY: window.scrollY },
+        '',
+      );
+      window.history.pushState({ scrollY: 0 }, '', routeToUrl(next));
+      window.scrollTo(0, 0);
     }
+    setRoute(next);
   }, []);
 
   // 401 falls back to login screen so a stale token isn't used silently.
