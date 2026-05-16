@@ -2,6 +2,12 @@
 
 本文件记录 jjplan 的版本变更, 格式参考 [Keep a Changelog](https://keepachangelog.com).
 
+## [0.8.19] - 2026-05-16
+
+### Fixed
+
+- **恢复浏览器 swipe-back 手势**: 删除 `globals.css` body 上的 `overscroll-behavior-x: none`. 该声明在根级生效, 会同时禁用 macOS 触控板两指左/右滑的浏览器导航手势, 导致全站无法滑动返回上一页. 拦截范围收窄到 `ChainGraph` 横滚容器自身 (`overscroll-x-contain`), 防止 chain 滚到尽头时把横向滚动冒泡给 body. 效果: 在 chain 卡片区横滑只滚卡片; 页面其他位置横滑浏览器 swipe-back 正常.
+
 ## [0.8.18] - 2026-05-16
 
 ### Added
