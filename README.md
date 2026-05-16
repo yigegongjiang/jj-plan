@@ -8,7 +8,7 @@
 curl -fsSL https://raw.githubusercontent.com/yigegongjiang/jj-plan/main/install.sh | bash
 ```
 
-共用配置 `~/.jjplan/config.json`:
+一条命令同时装 `jjplan` + `jjask` (不支持单独安装). 共用配置 `~/.jjplan/config.json`:
 
 ```json
 { "endpoint": "https://jjplan.<acct>.workers.dev", "token": "<password>" }
@@ -20,10 +20,10 @@ curl -fsSL https://raw.githubusercontent.com/yigegongjiang/jj-plan/main/install.
 
 `jjplan --help` / `jjask --help`. 浏览器开 `endpoint` 看 dashboard.
 
-## 卸载 / 换密码
+## 更新 / 卸载 / 换密码
 
-`jjplan uninstall` 同时移除两 binary. 换密码: `echo -n '<password>' | wrangler secret put JJPLAN_TOKEN`, 同步 config.json 与浏览器 localStorage.
+`jjplan self-update` 与 `jjask self-update` 等价, 都会同时更新 `jjplan` + `jjask`; `uninstall` 同理两个都卸. 换密码: `echo -n '<password>' | wrangler secret put JJPLAN_TOKEN`, 同步 config.json 与浏览器 localStorage.
 
 ## 版本号
 
-仓库根 `VERSION` 是唯一来源. 发版: 改 VERSION → 打 tag `v<VERSION>` → CI 部署 Worker + 上传双 binary 到 release.
+仓库根 `VERSION` 是唯一来源, Worker / Web / `jjplan` / `jjask` 共用同一版本号, 每次发版统一 bump 即使无代码改动. 发版: 改 VERSION + CHANGELOG → commit → 打 tag `v<VERSION>` → CI 部署 Worker + 上传 binary 到 release.

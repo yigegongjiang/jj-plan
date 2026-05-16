@@ -2,6 +2,18 @@
 
 本文件记录 jjplan 的版本变更, 格式参考 [Keep a Changelog](https://keepachangelog.com).
 
+## [0.8.20] - 2026-05-16
+
+### Changed
+
+- **CLI 源码 jjplan / jjask 分文件**: `cli/src/main.ts` 单文件 (运行时用 `JJPLAN_ENTRY` define 分叉两路) 拆为 `cli/src/{shared,jjplan,jjask}.ts` — `shared.ts` 平铺 config / api / io / parse / installer 与各类常量; `jjplan.ts` 含 project / spec / task handlers + USAGE + help + main; `jjask.ts` 同构. 删 `--define JJPLAN_ENTRY`, ENTRY 在各入口顶部硬编码.
+- **install.sh 内部循环化**: 接口不变 (`install.sh [install|update|uninstall]`), 内部用 `BINARIES` 数组 + `install_one` / `uninstall_one` 函数提取循环体. `self-update` / `uninstall` 仍同时影响 jjplan + jjask.
+- **CI release.yml**: `files: cli/dist/*-macos-arm64` 改用 glob.
+
+### Notes
+
+- 零 BREAKING. 仅源码结构 + 安装脚本内部循环化, 运行行为与 0.8.19 一致.
+
 ## [0.8.19] - 2026-05-16
 
 ### Fixed

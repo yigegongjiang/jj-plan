@@ -1,7 +1,7 @@
 import './globals.css';
 import type { Metadata, Viewport } from 'next';
 
-const VERSION = process.env.NEXT_PUBLIC_JJPLAN_VERSION ?? 'dev';
+const VERSION = process.env.NEXT_PUBLIC_JJ_VERSION ?? 'dev';
 
 export const metadata: Metadata = {
   title: 'JJ',

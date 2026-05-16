@@ -3,9 +3,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "NEXT_PUBLIC_JJPLAN_VERSION=$(tr -d '[:space:]' < ../VERSION) next dev",
-    "build": "NEXT_PUBLIC_JJPLAN_VERSION=$(tr -d '[:space:]' < ../VERSION) next build",
-    "start": "NEXT_PUBLIC_JJPLAN_VERSION=$(tr -d '[:space:]' < ../VERSION) next start",
+    "dev": "NEXT_PUBLIC_JJ_VERSION=$(tr -d '[:space:]' < ../VERSION) next dev",
+    "build": "NEXT_PUBLIC_JJ_VERSION=$(tr -d '[:space:]' < ../VERSION) next build",
+    "start": "NEXT_PUBLIC_JJ_VERSION=$(tr -d '[:space:]' < ../VERSION) next start",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

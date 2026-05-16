@@ -87,7 +87,5 @@ jobs:
       - name: Attach binaries to release
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            cli/dist/jjplan-macos-arm64
-            cli/dist/jjask-macos-arm64
+          files: cli/dist/*-macos-arm64
           fail_on_unmatched_files: true

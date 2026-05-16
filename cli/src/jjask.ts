@@ -1,0 +1,268 @@
+// jjask binary: Q&A (human ask) logging.
+import {
+  api,
+  die,
+  dieUsage,
+  print,
+  resolveVersion,
+  runInstaller,
+  validateProject,
+  requireId,
+  MAX_BODY_LEN,
+  MAX_PROJECT_NAME_LEN,
+  ASK_LIMIT_DEFAULT,
+  ASK_LIMIT_MAX,
+} from './shared';
+
+const ENTRY = 'jjask';
+const VERSION = resolveVersion();
+
+const USAGE = {
+  help: 'jjask --help',
+  version: 'jjask --version',
+  'self-update': 'jjask self-update',
+  uninstall: 'jjask uninstall',
+  'ask.new': 'jjask new <project> <body> [--origin <body>] [--after <prev_ask_id>]',
+  'ask.ls': `jjask ls <project> [--limit N]   (default ${ASK_LIMIT_DEFAULT}, max ${ASK_LIMIT_MAX})`,
+  'ask.show': 'jjask show <id>',
+  'ask.set': 'jjask set <id> --body <body>',
+  'ask.rm': 'jjask rm <id>',
+} as const;
+
+type UsageKey = keyof typeof USAGE;
+
+function fail(msg: string): never {
+  die(ENTRY, msg);
+}
+function failUsage(k: UsageKey, reason: string): never {
+  dieUsage(ENTRY, USAGE[k], reason);
+}
+
+function parseAskNewArgs(args: string[]): {
+  project: string;
+  body: string;
+  origin?: string;
+  prevId?: string;
+} {
+  let project: string | undefined;
+  let body: string | undefined;
+  let origin: string | undefined;
+  let prevId: string | undefined;
+
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (arg === undefined) continue;
+    if (arg === '--after') {
+      if (prevId !== undefined) failUsage('ask.new', 'duplicate --after');
+      prevId = args[++i];
+      if (typeof prevId !== 'string' || prevId.length === 0 || prevId.startsWith('--')) {
+        failUsage('ask.new', 'missing <prev_ask_id> after --after');
+      }
+    } else if (arg === '--origin') {
+      if (origin !== undefined) failUsage('ask.new', 'duplicate --origin');
+      const v = args[++i];
+      if (typeof v !== 'string') failUsage('ask.new', 'missing <body> after --origin');
+      origin = v;
+    } else if (arg.startsWith('--')) {
+      failUsage('ask.new', `unknown option ${arg}`);
+    } else if (project === undefined) {
+      project = arg;
+    } else if (body === undefined) {
+      body = arg;
+    } else {
+      failUsage('ask.new', `unexpected argument ${arg}`);
+    }
+  }
+
+  if (project === undefined) failUsage('ask.new', 'missing <project>');
+  if (body === undefined) failUsage('ask.new', 'missing <body>');
+  validateProject(ENTRY, project);
+  if (body.length === 0 || body.length > MAX_BODY_LEN) {
+    failUsage('ask.new', `body length must be 1..${MAX_BODY_LEN}`);
+  }
+  if (origin !== undefined && origin.length > MAX_BODY_LEN) {
+    failUsage('ask.new', `origin too long (max ${MAX_BODY_LEN} chars)`);
+  }
+  const out: { project: string; body: string; origin?: string; prevId?: string } = { project, body };
+  if (origin !== undefined) out.origin = origin;
+  if (prevId !== undefined) out.prevId = prevId;
+  return out;
+}
+
+function parseAskLsArgs(args: string[]): { project: string; limit?: number } {
+  let project: string | undefined;
+  let limit: number | undefined;
+
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (arg === undefined) continue;
+    if (arg === '--limit') {
+      if (limit !== undefined) failUsage('ask.ls', 'duplicate --limit');
+      const v = args[++i];
+      if (typeof v !== 'string' || v.startsWith('--')) {
+        failUsage('ask.ls', 'missing <N> after --limit');
+      }
+      const n = Number(v);
+      if (!Number.isInteger(n) || n < 1 || n > ASK_LIMIT_MAX) {
+        failUsage('ask.ls', `--limit must be integer in 1..${ASK_LIMIT_MAX}`);
+      }
+      limit = n;
+    } else if (arg.startsWith('--')) {
+      failUsage('ask.ls', `unknown option ${arg}`);
+    } else if (project === undefined) {
+      project = arg;
+    } else {
+      failUsage('ask.ls', `unexpected argument ${arg}`);
+    }
+  }
+
+  if (project === undefined) failUsage('ask.ls', 'missing <project>');
+  validateProject(ENTRY, project);
+  return limit !== undefined ? { project, limit } : { project };
+}
+
+function parseAskSetArgs(args: string[]): { id: string; body: string } {
+  let id: string | undefined;
+  let body: string | undefined;
+
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (arg === undefined) continue;
+    if (arg === '--body') {
+      if (body !== undefined) failUsage('ask.set', 'duplicate --body');
+      const v = args[++i];
+      if (typeof v !== 'string') failUsage('ask.set', 'missing <body> after --body');
+      body = v;
+    } else if (arg.startsWith('--')) {
+      failUsage('ask.set', `unknown option ${arg}`);
+    } else if (id === undefined) {
+      id = arg;
+    } else {
+      failUsage('ask.set', `unexpected argument ${arg}`);
+    }
+  }
+
+  if (id === undefined) failUsage('ask.set', 'missing <id>');
+  if (body === undefined) failUsage('ask.set', 'missing --body');
+  if (body.length === 0 || body.length > MAX_BODY_LEN) {
+    failUsage('ask.set', `body length must be 1..${MAX_BODY_LEN}`);
+  }
+  return { id, body };
+}
+
+type Handler = (rest: string[]) => Promise<void>;
+
+const commands: Record<string, Handler> = {
+  async 'ask.new'(args) {
+    const { project, body, origin, prevId } = parseAskNewArgs(args);
+    const payload: { body: string; origin?: string; prev_id?: string } = { body };
+    if (origin !== undefined) payload.origin = origin;
+    if (prevId) payload.prev_id = prevId;
+    print(await api(ENTRY, 'POST', `/projects/${encodeURIComponent(project)}/asks`, payload));
+  },
+
+  async 'ask.ls'(args) {
+    const { project, limit } = parseAskLsArgs(args);
+    const q = limit !== undefined ? `?limit=${limit}` : '';
+    print(await api(ENTRY, 'GET', `/projects/${encodeURIComponent(project)}/asks${q}`));
+  },
+
+  async 'ask.show'([id, ...rest]) {
+    const checked = requireId(ENTRY, id, rest, USAGE['ask.show']);
+    print(await api(ENTRY, 'GET', `/asks/${encodeURIComponent(checked)}`));
+  },
+
+  async 'ask.set'(args) {
+    const { id, body } = parseAskSetArgs(args);
+    print(await api(ENTRY, 'PATCH', `/asks/${encodeURIComponent(id)}`, { body }));
+  },
+
+  async 'ask.rm'([id, ...rest]) {
+    const checked = requireId(ENTRY, id, rest, USAGE['ask.rm']);
+    await api(ENTRY, 'DELETE', `/asks/${encodeURIComponent(checked)}`);
+  },
+};
+
+function printHelp(): void {
+  process.stdout.write(
+    `jjask ${VERSION}
+
+# TLDR
+jjask: 落盘人类抛给 AI 的请求 (Q&A 记录). 两层模型 project -> ask, id=ULID. <project>=cwd basename.
+
+  jjask new <project> <body> [--origin <原话>] [--after <prev_ask_id>]
+    # body=喂后续 AI 的最终输入. body=原话则省 --origin; body=改写 (原话口语化/含糊) 则 --origin MUST=原话, 不可省.
+    # --after: 接在上一条 ask 之后成链 (同一会话的追问/补充)
+
+输出: stdout 单行 JSON. body/origin 不读 stdin (位置/flag 参数). 查询/修改/删除见 jjask --help.
+
+# PURPOSE
+落盘人类抛给 AI 的请求 (body + 可选 origin 原话).
+
+# MODEL
+project (name) -- ask (id=ULID)
+- project 自动 upsert; ask 用 --after 串单链, 防 fork (409).
+- 中间删自动接续: A->B->C 删 B => A->C.
+- project rm 级联删全部 ask.
+
+# I/O
+- 输出: stdout 单行 JSON; DELETE 空 (204). 错误: stderr \`jjask: <msg>\` + 非零 exit.
+- <body> / --origin / --body 全是位置/flag 参数, 不读 stdin.
+- 限长 (chars): body 1..${MAX_BODY_LEN}, origin 0..${MAX_BODY_LEN}, project 1..${MAX_PROJECT_NAME_LEN}.
+
+# COMMANDS
+
+jjask --help | --version
+jjask self-update | uninstall            仅在用户明确要求时执行 (同时影响 jjplan)
+
+jjask new <project> <body> [--origin <body>] [--after <prev_ask_id>]
+  -> {id, project_id, body, origin, prev_id, created_at, updated_at}
+  err: 400 prev 跨项目/不存在 | 409 prev 已有后继
+jjask ls <project> [--limit N]   (default ${ASK_LIMIT_DEFAULT}, max ${ASK_LIMIT_MAX}, by updated_at DESC)
+  -> [{...ask}]
+  err: 404
+jjask show <id>
+  -> {...ask}
+  err: 404
+jjask set <id> --body <body>     (origin 一经创建不可改)
+  -> {...ask}
+  err: 400 | 404
+jjask rm <id>
+  err: 404 | 409
+`,
+  );
+}
+
+async function main(): Promise<void> {
+  const argv = process.argv.slice(2);
+
+  if (argv.length === 0 || argv[0] === 'help' || argv[0] === '-h' || argv[0] === '--help') {
+    if (argv.length > 1) failUsage('help', `unexpected argument ${argv[1]}`);
+    printHelp();
+    return;
+  }
+  if (argv[0] === '-v' || argv[0] === '--version') {
+    if (argv.length > 1) failUsage('version', `unexpected argument ${argv[1]}`);
+    process.stdout.write(`${VERSION}\n`);
+    return;
+  }
+  if (argv[0] === 'self-update') {
+    if (argv.length > 1) failUsage('self-update', `unexpected argument ${argv[1]}`);
+    runInstaller(ENTRY, []);
+    return;
+  }
+  if (argv[0] === 'uninstall') {
+    if (argv.length > 1) failUsage('uninstall', `unexpected argument ${argv[1]}`);
+    runInstaller(ENTRY, ['--uninstall']);
+    return;
+  }
+
+  const [verb, ...rest] = argv;
+  const handler = commands[`ask.${verb}`];
+  if (!handler) {
+    fail(`unknown command '${verb}'; usage: ${USAGE.help}`);
+  }
+  await handler(rest);
+}
+
+main().catch((e: unknown) => fail(e instanceof Error ? e.message : String(e)));
