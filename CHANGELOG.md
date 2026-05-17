@@ -2,6 +2,21 @@
 
 本文件记录 jjplan 的版本变更, 格式参考 [Keep a Changelog](https://keepachangelog.com).
 
+## [0.8.21] - 2026-05-17
+
+### Changed (BREAKING — `jjask` CLI 协议)
+
+- **`jjask` 移除 `--after` 参数, asks 转为扁平记录**: 每条 ask 都是独立记录, 不再支持串链 (无 prev/next 关系). 背景: 实际使用中所有 ask 都是 standalone, 链结构未带来价值, 反而带来 fork 拒绝 (409) / 中间删 rewire 等额外复杂度.
+- CLI `jjask.ts`: `new` 的 `--after <prev_ask_id>` 参数与对应解析逻辑删除; USAGE / help text 中 chain / fork / 409 prev 相关条款全部清理.
+- Worker `src/index.ts`: `POST /projects/:name/asks` 删除 `prev_id` 入参校验 (跨项目 / 不存在 / 409 fork) 与对应 try/catch; `DELETE /asks/:id` 改回单语句 DELETE, 去掉 successor rewire / OCC CAS / NOT EXISTS 守护; `AskRow` 删 `prev_id` 字段.
+- Worker `0004_drop_ask_prev_id.sql`: `DROP INDEX uq_asks_succ` + `DROP INDEX idx_asks_prev` + `ALTER TABLE asks DROP COLUMN prev_id`. 原有 ask 数据 body / origin / project_id / created_at / updated_at 全部保留.
+- Web `lib/types.ts`: `Ask` 接口删 `prev_id`. `components/AsksView.tsx`: 移除 `buildChains` / `ChainGraph` 引用与 standalone / chain 拆分逻辑, 改为单纯 grid 渲染所有 ask. `lib/chain.ts` + `components/ChainGraph.tsx` 保留 (`SpecsView` / `SpecDetail` 仍按 spec / task 链渲染).
+- Worker tests: 删除 `asks chain` describe 下全部 prev_id 用例 (chain 拒绝 / 跨项目 / 409 / DELETE rewire), 拆为独立的 `GET /asks/:id` / `PATCH /asks/:id` / `DELETE /asks/:id` describes; `rename migrates asks alongside specs` 用例去掉 chain 完整性断言, 仅断言迁移结果.
+
+### Notes
+
+- BREAKING 仅影响 `jjask new --after`; ask 创建/查询/编辑/删除其余语义不变. CLI 旧二进制传 `--after` 直接报 `unknown option`. 本次发版同步 worker + 数据库迁移, 不存在版本错位窗口. 已有数据 body / origin / project / 时间戳全部保留; 链信息按需求丢弃, 不可恢复.
+
 ## [0.8.20] - 2026-05-16
 
 ### Changed

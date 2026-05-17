@@ -66,7 +66,6 @@ interface Ask {
   project_id: string;
   body: string;
   origin: string;
-  prev_id: string | null;
   created_at: number;
   updated_at: number;
 }
@@ -171,7 +170,7 @@ async function rowCount(table: 'projects' | 'specs' | 'tasks' | 'asks'): Promise
 }
 
 async function newAsk(
-  payload: { body: string; origin?: string; prev_id?: string | null },
+  payload: { body: string; origin?: string },
   project: string = PROJECT,
 ): Promise<Ask> {
   const r = await jsonReq(`/projects/${project}/asks`, 'POST', payload);
@@ -1699,7 +1698,7 @@ describe('updated_at cascade and ordering', () => {
 });
 
 // =============================================================================
-// asks — independent of specs/tasks, mirrors specs' chain shape
+// asks — flat per-project records (body + immutable origin). No chain.
 // =============================================================================
 
 describe('POST /projects/:name/asks validation', () => {
@@ -1811,48 +1810,35 @@ describe('GET /projects/:name/asks', () => {
   });
 });
 
-describe('asks chain', () => {
-  it('prev_id pointing to nonexistent ask is rejected', async () => {
-    await newAsk({ body: 'seed' });
-    const r = await jsonReq(`/projects/${PROJECT}/asks`, 'POST', {
-      body: 'x',
-      prev_id: FAKE_ID,
-    });
-    expect(r.status).toBe(400);
-    expect((await r.json()).error).toMatch(/prev_id ask not found/);
-  });
-
-  it('prev_id from another project is rejected', async () => {
-    const a = await newAsk({ body: 'a' }, 'P1');
-    const r = await jsonReq(`/projects/P2/asks`, 'POST', { body: 'b', prev_id: a.id });
-    expect(r.status).toBe(400);
-    expect((await r.json()).error).toMatch(/same project/);
-  });
-
-  it('second successor of the same prev_id returns 409', async () => {
-    const a = await newAsk({ body: 'a' });
-    await newAsk({ body: 'b', prev_id: a.id });
-    const r = await jsonReq(`/projects/${PROJECT}/asks`, 'POST', { body: 'c', prev_id: a.id });
-    expect(r.status).toBe(409);
-  });
-
-  it('GET /asks/:id 404 on missing', async () => {
+describe('GET /asks/:id', () => {
+  it('404 on missing', async () => {
     const r = await authed(`/asks/${FAKE_ID}`);
     expect(r.status).toBe(404);
   });
 
-  it('PATCH /asks/:id changes body only', async () => {
+  it('returns the ask body/origin', async () => {
+    const a = await newAsk({ body: 'b', origin: 'o' });
+    const r = await authed(`/asks/${a.id}`);
+    expect(r.status).toBe(200);
+    const got = await r.json();
+    expect(got.body).toBe('b');
+    expect(got.origin).toBe('o');
+  });
+});
+
+describe('PATCH /asks/:id', () => {
+  it('changes body only; origin is immutable', async () => {
     const a = await newAsk({ body: 'old', origin: 'kept' });
     await tick();
     const r = await jsonReq(`/asks/${a.id}`, 'PATCH', { body: 'new' });
     expect(r.status).toBe(200);
     const updated = await r.json();
     expect(updated.body).toBe('new');
-    expect(updated.origin).toBe('kept'); // immutable
+    expect(updated.origin).toBe('kept');
     expect(updated.updated_at).toBeGreaterThan(a.updated_at);
   });
 
-  it('PATCH ignores unknown fields and rejects missing body', async () => {
+  it('ignores unknown fields and rejects missing body', async () => {
     const a = await newAsk({ body: 'old', origin: 'kept' });
     const r1 = await jsonReq(`/asks/${a.id}`, 'PATCH', { origin: 'hack' });
     expect(r1.status).toBe(400);
@@ -1860,12 +1846,12 @@ describe('asks chain', () => {
     expect(r2.status).toBe(400);
   });
 
-  it('PATCH /asks/:id 404 on missing id', async () => {
+  it('404 on missing id', async () => {
     const r = await jsonReq(`/asks/${FAKE_ID}`, 'PATCH', { body: 'x' });
     expect(r.status).toBe(404);
   });
 
-  it('PATCH bumps parent project.updated_at', async () => {
+  it('bumps parent project.updated_at', async () => {
     const a = await newAsk({ body: 'old' });
     const projBefore = (await listProjects()).find((p) => p.name === PROJECT)!;
     await tick();
@@ -1873,30 +1859,28 @@ describe('asks chain', () => {
     const projAfter = (await listProjects()).find((p) => p.name === PROJECT)!;
     expect(projAfter.updated_at).toBeGreaterThan(projBefore.updated_at);
   });
+});
 
-  it('DELETE head rewires successor to standalone', async () => {
+describe('DELETE /asks/:id', () => {
+  it('removes one ask and leaves others intact', async () => {
     const a = await newAsk({ body: 'A' });
-    await tick();
-    const b = await newAsk({ body: 'B', prev_id: a.id });
+    const b = await newAsk({ body: 'B' });
     const r = await authed(`/asks/${a.id}`, { method: 'DELETE' });
     expect(r.status).toBe(204);
-    const updated = await (await authed(`/asks/${b.id}`)).json();
-    expect(updated.prev_id).toBeNull();
+    expect((await authed(`/asks/${a.id}`)).status).toBe(404);
+    expect((await authed(`/asks/${b.id}`)).status).toBe(200);
   });
 
-  it('DELETE middle rewires successor onto predecessor', async () => {
-    const a = await newAsk({ body: 'A' });
+  it('bumps parent project.updated_at', async () => {
+    const a = await newAsk({ body: 'a' });
+    const before = (await listProjects()).find((p) => p.name === PROJECT)!;
     await tick();
-    const b = await newAsk({ body: 'B', prev_id: a.id });
-    await tick();
-    const c = await newAsk({ body: 'C', prev_id: b.id });
-    const r = await authed(`/asks/${b.id}`, { method: 'DELETE' });
-    expect(r.status).toBe(204);
-    const updated = await (await authed(`/asks/${c.id}`)).json();
-    expect(updated.prev_id).toBe(a.id);
+    await authed(`/asks/${a.id}`, { method: 'DELETE' });
+    const after = (await listProjects()).find((p) => p.name === PROJECT)!;
+    expect(after.updated_at).toBeGreaterThan(before.updated_at);
   });
 
-  it('DELETE 404 on missing id', async () => {
+  it('404 on missing id', async () => {
     const r = await authed(`/asks/${FAKE_ID}`, { method: 'DELETE' });
     expect(r.status).toBe(404);
   });
@@ -2014,16 +1998,14 @@ describe('PATCH /projects/:name', () => {
   it('rename migrates asks alongside specs', async () => {
     await newSpec({ title: 'A' }, 'old');
     const a1 = await newAsk({ body: 'q1' }, 'old');
-    const a2 = await newAsk({ body: 'q2', prev_id: a1.id }, 'old');
+    const a2 = await newAsk({ body: 'q2' }, 'old');
 
     const r = await jsonReq('/projects/old', 'PATCH', { new_name: 'fresh' });
     expect(r.status).toBe(200);
 
     const asks = await listAsks('fresh');
     expect(asks.map((a) => a.id).sort()).toEqual([a1.id, a2.id].sort());
-    // chain still intact: a2.prev_id should still point at a1
-    const a2Reloaded = asks.find((a) => a.id === a2.id)!;
-    expect(a2Reloaded.prev_id).toBe(a1.id);
+    expect(asks.every((a) => a.project_id === 'fresh')).toBe(true);
   });
 
   it('merge (target exists) folds source specs/asks into target', async () => {

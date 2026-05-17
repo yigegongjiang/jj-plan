@@ -55,7 +55,6 @@ interface AskRow {
   project_id: string;
   body: string;
   origin: string;
-  prev_id: string | null;
   created_at: number;
   updated_at: number;
 }
@@ -814,7 +813,7 @@ app.delete('/tasks/:id', async (c) => {
 });
 
 // ---------- asks ----------
-// Same project/chain shape as specs; only body + immutable origin columns.
+// Flat per-project records: body + immutable origin. No chain.
 
 function parseAskBody(raw: unknown): { ok: true; value: string } | { ok: false; error: string } {
   if (typeof raw !== 'string' || raw.length === 0) {
@@ -844,7 +843,6 @@ app.post('/projects/:name/asks', async (c) => {
   const parsedBody = await parseJsonBody<{
     body?: unknown;
     origin?: unknown;
-    prev_id?: unknown;
   }>(c);
   if (!parsedBody.ok) return parsedBody.response;
 
@@ -853,45 +851,19 @@ app.post('/projects/:name/asks', async (c) => {
   const originParsed = parseAskOrigin(parsedBody.value.origin);
   if (!originParsed.ok) return c.json({ error: originParsed.error }, 400);
 
-  let prevId: string | null = null;
-  if (parsedBody.value.prev_id !== undefined && parsedBody.value.prev_id !== null) {
-    if (typeof parsedBody.value.prev_id !== 'string') {
-      return c.json({ error: 'prev_id must be string or null' }, 400);
-    }
-    const prev = await c.env.DB
-      .prepare('SELECT project_id FROM asks WHERE id = ?')
-      .bind(parsedBody.value.prev_id)
-      .first<{ project_id: string }>();
-    if (!prev) return c.json({ error: 'prev_id ask not found' }, 400);
-    if (prev.project_id !== name) {
-      return c.json({ error: 'prev_id must belong to the same project' }, 400);
-    }
-    prevId = parsedBody.value.prev_id;
-  }
-
   const id = ulid();
   const t = now();
-  try {
-    await c.env.DB.batch([
-      c.env.DB
-        .prepare('INSERT OR IGNORE INTO projects (name, created_at, updated_at) VALUES (?, ?, ?)')
-        .bind(name, t, t),
-      c.env.DB
-        .prepare(
-          'INSERT INTO asks (id, project_id, body, origin, prev_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-        )
-        .bind(id, name, bodyParsed.value, originParsed.value, prevId, t, t),
-      bumpProject(c.env.DB, name, t),
-    ]);
-  } catch (e) {
-    if (isUniqueViolation(e)) {
-      return c.json({ error: 'prev_id already has a successor' }, 409);
-    }
-    if (isFkViolation(e)) {
-      return c.json({ error: 'prev_id no longer exists' }, 400);
-    }
-    throw e;
-  }
+  await c.env.DB.batch([
+    c.env.DB
+      .prepare('INSERT OR IGNORE INTO projects (name, created_at, updated_at) VALUES (?, ?, ?)')
+      .bind(name, t, t),
+    c.env.DB
+      .prepare(
+        'INSERT INTO asks (id, project_id, body, origin, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
+      )
+      .bind(id, name, bodyParsed.value, originParsed.value, t, t),
+    bumpProject(c.env.DB, name, t),
+  ]);
   return c.json(await readAsk(c.env.DB, id), 201);
 });
 
@@ -945,54 +917,16 @@ app.patch('/asks/:id', async (c) => {
   return c.json(await readAsk(c.env.DB, id));
 });
 
-// Same OCC pattern as DELETE /specs/:id.
 app.delete('/asks/:id', async (c) => {
   const id = c.req.param('id');
   const ask = await readAsk(c.env.DB, id);
   if (!ask) return c.json({ error: 'ask not found' }, 404);
 
-  const succ = await c.env.DB
-    .prepare('SELECT id FROM asks WHERE prev_id = ?')
-    .bind(id)
-    .first<{ id: string }>();
-
   const t = now();
-  const ops = [
-    c.env.DB
-      .prepare('DELETE FROM asks WHERE id = ? AND prev_id IS ?')
-      .bind(id, ask.prev_id),
-  ];
-  if (succ) {
-    ops.push(
-      c.env.DB
-        .prepare(
-          'UPDATE asks SET prev_id = ?, updated_at = ? WHERE id = ? AND NOT EXISTS (SELECT 1 FROM asks WHERE id = ?)',
-        )
-        .bind(ask.prev_id, t, succ.id, id),
-    );
-  }
-  ops.push(
-    c.env.DB
-      .prepare(
-        'UPDATE projects SET updated_at = ? WHERE name = ? AND NOT EXISTS (SELECT 1 FROM asks WHERE id = ?)',
-      )
-      .bind(t, ask.project_id, id),
-  );
-
-  let results;
-  try {
-    results = await c.env.DB.batch(ops);
-  } catch (e) {
-    if (isUniqueViolation(e) || isFkViolation(e)) {
-      return c.json({ error: 'concurrent modification, retry' }, 409);
-    }
-    throw e;
-  }
-  if (!results[0] || results[0].meta.changes === 0) {
-    const stillExists = await readAsk(c.env.DB, id);
-    if (!stillExists) return c.json({ error: 'ask not found' }, 404);
-    return c.json({ error: 'concurrent modification, retry' }, 409);
-  }
+  await c.env.DB.batch([
+    c.env.DB.prepare('DELETE FROM asks WHERE id = ?').bind(id),
+    bumpProject(c.env.DB, ask.project_id, t),
+  ]);
   return c.body(null, 204);
 });
 

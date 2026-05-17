@@ -22,7 +22,7 @@ const USAGE = {
   version: 'jjask --version',
   'self-update': 'jjask self-update',
   uninstall: 'jjask uninstall',
-  'ask.new': 'jjask new <project> <body> [--origin <body>] [--after <prev_ask_id>]',
+  'ask.new': 'jjask new <project> <body> [--origin <body>]',
   'ask.ls': `jjask ls <project> [--limit N]   (default ${ASK_LIMIT_DEFAULT}, max ${ASK_LIMIT_MAX})`,
   'ask.show': 'jjask show <id>',
   'ask.set': 'jjask set <id> --body <body>',
@@ -42,23 +42,15 @@ function parseAskNewArgs(args: string[]): {
   project: string;
   body: string;
   origin?: string;
-  prevId?: string;
 } {
   let project: string | undefined;
   let body: string | undefined;
   let origin: string | undefined;
-  let prevId: string | undefined;
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     if (arg === undefined) continue;
-    if (arg === '--after') {
-      if (prevId !== undefined) failUsage('ask.new', 'duplicate --after');
-      prevId = args[++i];
-      if (typeof prevId !== 'string' || prevId.length === 0 || prevId.startsWith('--')) {
-        failUsage('ask.new', 'missing <prev_ask_id> after --after');
-      }
-    } else if (arg === '--origin') {
+    if (arg === '--origin') {
       if (origin !== undefined) failUsage('ask.new', 'duplicate --origin');
       const v = args[++i];
       if (typeof v !== 'string') failUsage('ask.new', 'missing <body> after --origin');
@@ -83,9 +75,8 @@ function parseAskNewArgs(args: string[]): {
   if (origin !== undefined && origin.length > MAX_BODY_LEN) {
     failUsage('ask.new', `origin too long (max ${MAX_BODY_LEN} chars)`);
   }
-  const out: { project: string; body: string; origin?: string; prevId?: string } = { project, body };
+  const out: { project: string; body: string; origin?: string } = { project, body };
   if (origin !== undefined) out.origin = origin;
-  if (prevId !== undefined) out.prevId = prevId;
   return out;
 }
 
@@ -154,10 +145,9 @@ type Handler = (rest: string[]) => Promise<void>;
 
 const commands: Record<string, Handler> = {
   async 'ask.new'(args) {
-    const { project, body, origin, prevId } = parseAskNewArgs(args);
-    const payload: { body: string; origin?: string; prev_id?: string } = { body };
+    const { project, body, origin } = parseAskNewArgs(args);
+    const payload: { body: string; origin?: string } = { body };
     if (origin !== undefined) payload.origin = origin;
-    if (prevId) payload.prev_id = prevId;
     print(await api(ENTRY, 'POST', `/projects/${encodeURIComponent(project)}/asks`, payload));
   },
 
@@ -189,10 +179,10 @@ function printHelp(): void {
 
 # TLDR
 jjask: 落盘人类抛给 AI 的请求 (Q&A 记录). 两层模型 project -> ask, id=ULID. <project>=cwd basename.
+每条 ask 都是独立记录, 不串链.
 
-  jjask new <project> <body> [--origin <原话>] [--after <prev_ask_id>]
+  jjask new <project> <body> [--origin <原话>]
     # body=喂后续 AI 的最终输入. body=原话则省 --origin; body=改写 (原话口语化/含糊) 则 --origin MUST=原话, 不可省.
-    # --after: 接在上一条 ask 之后成链 (同一会话的追问/补充)
 
 输出: stdout 单行 JSON. body/origin 不读 stdin (位置/flag 参数). 查询/修改/删除见 jjask --help.
 
@@ -201,8 +191,8 @@ jjask: 落盘人类抛给 AI 的请求 (Q&A 记录). 两层模型 project -> ask
 
 # MODEL
 project (name) -- ask (id=ULID)
-- project 自动 upsert; ask 用 --after 串单链, 防 fork (409).
-- 中间删自动接续: A->B->C 删 B => A->C.
+- project 自动 upsert.
+- ask 之间相互独立, 无 prev/next 关系.
 - project rm 级联删全部 ask.
 
 # I/O
@@ -215,9 +205,8 @@ project (name) -- ask (id=ULID)
 jjask --help | --version
 jjask self-update | uninstall            仅在用户明确要求时执行 (同时影响 jjplan)
 
-jjask new <project> <body> [--origin <body>] [--after <prev_ask_id>]
-  -> {id, project_id, body, origin, prev_id, created_at, updated_at}
-  err: 400 prev 跨项目/不存在 | 409 prev 已有后继
+jjask new <project> <body> [--origin <body>]
+  -> {id, project_id, body, origin, created_at, updated_at}
 jjask ls <project> [--limit N]   (default ${ASK_LIMIT_DEFAULT}, max ${ASK_LIMIT_MAX}, by updated_at DESC)
   -> [{...ask}]
   err: 404
@@ -228,7 +217,7 @@ jjask set <id> --body <body>     (origin 一经创建不可改)
   -> {...ask}
   err: 400 | 404
 jjask rm <id>
-  err: 404 | 409
+  err: 404
 `,
   );
 }

@@ -2,10 +2,8 @@
 
 import { useMemo, useState } from 'react';
 
-import { buildChains } from '@/lib/chain';
 import { fmtTime } from '@/lib/format';
 import type { Ask } from '@/lib/types';
-import ChainGraph from './ChainGraph';
 
 interface Props {
   asks: Ask[] | null;
@@ -14,20 +12,6 @@ interface Props {
 }
 
 export default function AsksView({ asks, onEdit, onDelete }: Props) {
-  // Split chains: length=1 (standalone) flows into a CSS grid so独立 ask 在宽屏并排,
-  // length>=2 (real chains) keep ChainGraph 的横向链式语义。
-  const { standalones, chains } = useMemo(() => {
-    if (!asks) return { standalones: [] as Ask[], chains: [] as Ask[][] };
-    const all = buildChains(asks);
-    const standalones: Ask[] = [];
-    const chains: Ask[][] = [];
-    for (const c of all) {
-      if (c.length === 1) standalones.push(c[0]);
-      else chains.push(c);
-    }
-    return { standalones, chains };
-  }, [asks]);
-
   if (asks === null) {
     return (
       <section>
@@ -36,9 +20,7 @@ export default function AsksView({ asks, onEdit, onDelete }: Props) {
     );
   }
 
-  const isEmpty = standalones.length === 0 && chains.length === 0;
-
-  if (isEmpty) {
+  if (asks.length === 0) {
     return (
       <section>
         <div className="text-sm text-zinc-400 italic px-4 py-8 text-center">
@@ -49,33 +31,15 @@ export default function AsksView({ asks, onEdit, onDelete }: Props) {
   }
 
   return (
-    <section className="space-y-4">
-      {standalones.length > 0 && (
-        <div className="grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(min(20rem,100%),1fr))]">
-          {standalones.map((ask) => (
-            <AskCard
-              key={ask.id}
-              ask={ask}
-              onEdit={() => onEdit(ask)}
-              onDelete={() => onDelete(ask)}
-            />
-          ))}
-        </div>
-      )}
-      {chains.length > 0 && (
-        <ChainGraph
-          chains={chains}
-          renderNode={(ask) => (
-            <div className="w-[22rem] shrink-0">
-              <AskCard
-                ask={ask}
-                onEdit={() => onEdit(ask)}
-                onDelete={() => onDelete(ask)}
-              />
-            </div>
-          )}
+    <section className="grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(min(20rem,100%),1fr))]">
+      {asks.map((ask) => (
+        <AskCard
+          key={ask.id}
+          ask={ask}
+          onEdit={() => onEdit(ask)}
+          onDelete={() => onDelete(ask)}
         />
-      )}
+      ))}
     </section>
   );
 }
