@@ -2,6 +2,16 @@
 
 本文件记录 jjplan 的版本变更, 格式参考 [Keep a Changelog](https://keepachangelog.com).
 
+## [0.8.22] - 2026-05-17
+
+### Changed
+
+- **`jjask --help` TLDR 段 `--origin` 文案再次重写, 把改写敏感度从"口语化/含糊就改写"降到"无法直接执行才改写"**: 背景 — 0.8.x 版的"body=改写 (原话口语化/含糊) 则 --origin MUST=原话"把改写说成两条等价路径之一, AI (claudecode / codex) 容易把任何稍微口语化的原话判定为可改写, 改写时又频繁丢失原话细节/重点/数字/路径, 导致后续执行偏离用户真实诉求. 新文案显式声明: 默认 `body=原话原文照搬, 省 --origin (这是绝大多数情况)`; 改写阈值收紧到 `原话本身无法直接喂给后续 AI 执行 (缺主语/无指令/纯情绪宣泄/严重歧义 — 不是"口语化"也不是"含糊", 而是真的执行不了)`; 改写质量强约束 `body MUST 保留原话全部细节/信息/重点/约束/数字/路径/术语, 仅补足执行所需的缺失成分, 不删减/不抽象/不概括/不归纳/不润色`; 兜底原则 `拿不准就照搬原话`. 仅改 `cli/src/jjask.ts` 的 `printHelp` TLDR, USAGE 签名 / COMMANDS 段 / worker / web / schema 不动.
+
+### Notes
+
+- 零 BREAKING. CLI 协议 / worker / 数据库 / web 全部不变, 仅 `jjask --help` 输出文本调整. 用户全局 `~/.claude/CLAUDE.md` 中如果嵌入了旧版 jjask 引导文本, 需同步替换为新版 (本工程不主动修改用户全局规则).
+
 ## [0.8.21] - 2026-05-17
 
 ### Changed (BREAKING — `jjask` CLI 协议)

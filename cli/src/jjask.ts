@@ -182,7 +182,7 @@ jjask: 落盘人类抛给 AI 的请求 (Q&A 记录). 两层模型 project -> ask
 每条 ask 都是独立记录, 不串链.
 
   jjask new <project> <body> [--origin <原话>]
-    # body=喂后续 AI 的最终输入. body=原话则省 --origin; body=改写 (原话口语化/含糊) 则 --origin MUST=原话, 不可省.
+    # 默认 body=原话原文照搬, 省 --origin (这是绝大多数情况). 仅当原话本身无法直接喂给后续 AI 执行 (缺主语/无指令/纯情绪宣泄/严重歧义 — 不是"口语化"也不是"含糊", 而是真的执行不了) 才允许改写; 此时 --origin MUST=原话, 且 body MUST 保留原话全部细节/信息/重点/约束/数字/路径/术语, 仅补足执行所需的缺失成分, 不删减/不抽象/不概括/不归纳/不润色. 拿不准就照搬原话.
 
 输出: stdout 单行 JSON. body/origin 不读 stdin (位置/flag 参数). 查询/修改/删除见 jjask --help.
 
