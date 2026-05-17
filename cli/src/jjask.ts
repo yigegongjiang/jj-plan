@@ -20,7 +20,7 @@ const VERSION = resolveVersion();
 const USAGE = {
   help: 'jjask --help',
   version: 'jjask --version',
-  'self-update': 'jjask self-update',
+  update: 'jjask update | upgrade',
   uninstall: 'jjask uninstall',
   'ask.new': 'jjask new <project> <body> [--origin <body>]',
   'ask.ls': `jjask ls <project> [--limit N]   (default ${ASK_LIMIT_DEFAULT}, max ${ASK_LIMIT_MAX})`,
@@ -203,7 +203,7 @@ project (name) -- ask (id=ULID)
 # COMMANDS
 
 jjask --help | --version
-jjask self-update | uninstall            仅在用户明确要求时执行 (同时影响 jjplan)
+jjask update | upgrade | uninstall       仅在用户明确要求时执行 (同时影响 jjplan; update/upgrade 等价)
 
 jjask new <project> <body> [--origin <body>]
   -> {id, project_id, body, origin, created_at, updated_at}
@@ -235,8 +235,8 @@ async function main(): Promise<void> {
     process.stdout.write(`${VERSION}\n`);
     return;
   }
-  if (argv[0] === 'self-update') {
-    if (argv.length > 1) failUsage('self-update', `unexpected argument ${argv[1]}`);
+  if (argv[0] === 'update' || argv[0] === 'upgrade') {
+    if (argv.length > 1) failUsage('update', `unexpected argument ${argv[1]}`);
     runInstaller(ENTRY, []);
     return;
   }

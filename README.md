@@ -1,6 +1,8 @@
 # jjplan
 
-为 AI 设计的 Spec/Task/Ask 跟踪. 数据在 Cloudflare D1, 通过 Worker 暴露; 本地两个 CLI (`jjplan` + `jjask`).
+> **AI-only project**: 本仓库由 Claude Code / Codex 独立维护. 用户 = 触发者 + 验收者, 不是协作开发者. 设计 / 编码 / 发版全部 AI 决策, 不参考人类惯例.
+
+为 AI 设计的 Spec/Task/Ask 跟踪 (仅 macOS, x64 + arm64). 数据在 Cloudflare D1, 经 Worker 暴露; 本地两个 CLI (`jjplan` + `jjask`) 共用 endpoint/token.
 
 ## 安装
 
@@ -8,22 +10,18 @@
 curl -fsSL https://raw.githubusercontent.com/yigegongjiang/jj-plan/main/install.sh | bash
 ```
 
-一条命令同时装 `jjplan` + `jjask` (不支持单独安装). 共用配置 `~/.jjplan/config.json`:
+一条命令同时装 `jjplan` + `jjask` 到 `$HOME/.local/bin/`. 配置 `~/.jjplan/config.json`:
 
 ```json
 { "endpoint": "https://jjplan.<acct>.workers.dev", "token": "<password>" }
 ```
 
-`wrangler secret put JJPLAN_TOKEN` 把同一个值塞进 Worker.
+`wrangler secret put JJPLAN_TOKEN` 把同一 token 塞进 Worker.
 
 ## 用
 
 `jjplan --help` / `jjask --help`. 浏览器开 `endpoint` 看 dashboard.
 
-## 更新 / 卸载 / 换密码
+## 更新 / 卸载
 
-`jjplan self-update` 与 `jjask self-update` 等价, 都会同时更新 `jjplan` + `jjask`; `uninstall` 同理两个都卸. 换密码: `echo -n '<password>' | wrangler secret put JJPLAN_TOKEN`, 同步 config.json 与浏览器 localStorage.
-
-## 版本号
-
-仓库根 `VERSION` 是唯一来源, Worker / Web / `jjplan` / `jjask` 共用同一版本号, 每次发版统一 bump 即使无代码改动. 发版: 改 VERSION + CHANGELOG → commit → 打 tag `v<VERSION>` → CI 部署 Worker + 上传 binary 到 release.
+`jjplan update` (= `upgrade`) 同时更新两个二进制; `uninstall` 同理两个都卸, config 保留.

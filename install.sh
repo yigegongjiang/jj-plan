@@ -1,99 +1,135 @@
 #!/usr/bin/env bash
-# Install/update/uninstall jjplan + jjask into ~/.local/bin/. Idempotent.
-# One action covers both binaries; there is no per-binary mode.
+# install.sh — install / update / uninstall jjplan + jjask from GitHub Releases.
+# One action covers both binaries; per-binary mode is not supported.
+#
+# Usage:
+#   curl -fsSL https://raw.githubusercontent.com/yigegongjiang/jj-plan/main/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/yigegongjiang/jj-plan/main/install.sh | VERSION=v0.8.23 bash
+#   INSTALL_DIR=/usr/local/bin ./install.sh
+#   ./install.sh uninstall
 
 set -euo pipefail
 
-REPO="yigegongjiang/jj-plan"
-BIN_DIR="${HOME}/.local/bin"
-
+REPO="${REPO:-yigegongjiang/jj-plan}"
+VERSION="${VERSION:-latest}"
+INSTALL_DIR="${INSTALL_DIR:-$HOME/.local/bin}"
 BINARIES=(jjplan jjask)
 
-asset_for() {
-  case "$1" in
-    jjplan) echo "jjplan-macos-arm64" ;;
-    jjask)  echo "jjask-macos-arm64"  ;;
-    *) echo "install.sh: unknown binary $1" >&2; exit 2 ;;
-  esac
-}
+err()  { printf 'install.sh: %s\n' "$*" >&2; exit 1; }
+info() { printf '%s\n' "$*"; }
 
 usage() {
   cat <<'EOF'
 usage: install.sh [install|update|uninstall]
   install/update: download jjplan + jjask
   uninstall:      remove jjplan + jjask (config kept)
+env:
+  REPO=<owner>/<repo>   default yigegongjiang/jj-plan
+  VERSION=latest|vX.Y.Z default latest
+  INSTALL_DIR=<path>    default $HOME/.local/bin
 EOF
+}
+
+command -v curl >/dev/null 2>&1 || err "curl is required"
+
+case "$(uname -s)" in
+  Darwin) ;;
+  *) err "unsupported OS: $(uname -s) (only macOS is supported)" ;;
+esac
+case "$(uname -m)" in
+  x86_64|amd64)  host_arch="x64" ;;
+  aarch64|arm64) host_arch="arm64" ;;
+  *) err "unsupported macOS architecture: $(uname -m)" ;;
+esac
+
+if [ "$VERSION" = "latest" ]; then
+  base="https://github.com/${REPO}/releases/latest/download"
+else
+  base="https://github.com/${REPO}/releases/download/${VERSION}"
+fi
+checksums_url="${base}/checksums.txt"
+
+# Fetch checksums.txt once (best-effort). Empty when missing → checksum step skipped.
+checksums="$(curl -fsSL --retry 3 "$checksums_url" 2>/dev/null || true)"
+
+verify_checksum() {
+  local file="$1" asset="$2" line expected actual
+  [ -n "$checksums" ] || return 0
+  line="$(printf '%s\n' "$checksums" | grep " ${asset}$" || true)"
+  [ -n "$line" ] || return 0
+  expected="${line%% *}"
+  actual="$(shasum -a 256 "$file" | awk '{print $1}')"
+  [ "$expected" = "$actual" ] || err "checksum mismatch for ${asset} (expected ${expected}, got ${actual})"
+  info "    checksum OK"
 }
 
 install_one() {
   local name="$1"
-  local asset url tmp dest
-  asset="$(asset_for "$name")"
-  url="https://github.com/${REPO}/releases/latest/download/${asset}"
+  local asset="${name}-macos-${host_arch}"
+  local url="${base}/${asset}"
+  local tmp dest
+
   tmp="$(mktemp "${TMPDIR:-/tmp}/${name}.XXXXXX")"
   trap 'rm -f "$tmp"' EXIT
 
-  echo "downloading ${url}"
-  curl -fL --progress-bar "$url" -o "$tmp"
+  info "==> downloading ${url}"
+  curl -fL --retry 3 --progress-bar "$url" -o "$tmp" || err "download failed: $url"
+  verify_checksum "$tmp" "$asset"
   chmod +x "$tmp"
 
-  dest="${BIN_DIR}/${name}"
-  mv "$tmp" "$dest"
+  dest="${INSTALL_DIR}/${name}"
+  mv -f "$tmp" "$dest"
   trap - EXIT
 
-  echo "installed: $dest"
+  info "installed: $dest"
   "$dest" --version || true
 }
 
 uninstall_one() {
   local name="$1"
-  local dest="${BIN_DIR}/${name}"
+  local dest="${INSTALL_DIR}/${name}"
   if [ -e "$dest" ]; then
     rm -f "$dest"
-    echo "removed: $dest"
+    info "removed: $dest"
   else
-    echo "not installed: $dest"
+    info "not installed: $dest"
   fi
 }
 
 ACTION="${1:-install}"
 if [ "$#" -gt 1 ]; then
-  echo "install.sh: too many arguments" >&2
-  usage >&2
-  exit 2
+  err "too many arguments"
 fi
 
 case "$ACTION" in
   install|update|--install|--update) ACTION="install" ;;
   uninstall|--uninstall) ACTION="uninstall" ;;
   help|-h|--help) usage; exit 0 ;;
-  *)
-    echo "install.sh: unknown action '$ACTION'" >&2
-    usage >&2
-    exit 2
-    ;;
+  *) usage >&2; err "unknown action '$ACTION'" ;;
 esac
 
 if [ "$ACTION" = "uninstall" ]; then
-  for n in "${BINARIES[@]}"; do
-    uninstall_one "$n"
-  done
-  echo "config kept: ${HOME}/.jjplan/config.json"
+  for n in "${BINARIES[@]}"; do uninstall_one "$n"; done
+  info "config kept: ${HOME}/.jjplan/config.json"
   exit 0
 fi
 
-mkdir -p "$BIN_DIR"
+mkdir -p "$INSTALL_DIR"
 
-for n in "${BINARIES[@]}"; do
-  install_one "$n"
-done
+info "==> installing jjplan + jjask"
+info "    repo:    ${REPO}"
+info "    version: ${VERSION}"
+info "    arch:    darwin-${host_arch}"
+info "    target:  ${INSTALL_DIR}"
+
+for n in "${BINARIES[@]}"; do install_one "$n"; done
 
 case ":$PATH:" in
-  *":${BIN_DIR}:"*) ;;
+  *":${INSTALL_DIR}:"*) ;;
   *)
-    echo
-    echo "warning: ${BIN_DIR} is not in your PATH."
-    echo "  add this to ~/.zshrc or ~/.bashrc:"
-    echo "    export PATH=\"\$HOME/.local/bin:\$PATH\""
+    info ""
+    info "warning: ${INSTALL_DIR} is not in your PATH."
+    info "  add this to ~/.zshrc or ~/.bashrc:"
+    info "    export PATH=\"${INSTALL_DIR}:\$PATH\""
     ;;
 esac

@@ -200,3 +200,4 @@ docs
 
 ### bun build temp artifacts ###
 *.bun-build
+.*.bun-build

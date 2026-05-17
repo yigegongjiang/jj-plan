@@ -2,16 +2,13 @@
   "name": "jjplan-cli",
   "private": true,
   "type": "module",
+  "repository": "yigegongjiang/jj-plan",
   "scripts": {
-    "build": "bun run build:jjplan && bun run build:jjask",
-    "build:jjplan": "mkdir -p dist && bun build src/jjplan.ts --compile --target=bun-darwin-arm64 --define JJ_VERSION=$(bun -p \"JSON.stringify(require('fs').readFileSync('../VERSION','utf8').trim())\") --outfile dist/jjplan-macos-arm64",
-    "build:jjask": "mkdir -p dist && bun build src/jjask.ts --compile --target=bun-darwin-arm64 --define JJ_VERSION=$(bun -p \"JSON.stringify(require('fs').readFileSync('../VERSION','utf8').trim())\") --outfile dist/jjask-macos-arm64",
-    "build:local": "bun run build:local:jjplan && bun run build:local:jjask",
-    "build:local:jjplan": "mkdir -p $HOME/.local/bin && bun build src/jjplan.ts --compile --define JJ_VERSION=$(bun -p \"JSON.stringify(require('fs').readFileSync('../VERSION','utf8').trim())\") --outfile $HOME/.local/bin/jjplan",
-    "build:local:jjask": "mkdir -p $HOME/.local/bin && bun build src/jjask.ts --compile --define JJ_VERSION=$(bun -p \"JSON.stringify(require('fs').readFileSync('../VERSION','utf8').trim())\") --outfile $HOME/.local/bin/jjask",
+    "build": "bun run build.ts",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
+    "@types/bun": "latest",
     "@types/node": "^22.19.18",
     "typescript": "^5.9.3"
   }

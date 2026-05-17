@@ -26,7 +26,7 @@ const VERSION = resolveVersion();
 const USAGE = {
   help: 'jjplan --help',
   version: 'jjplan --version',
-  'self-update': 'jjplan self-update',
+  update: 'jjplan update | upgrade',
   uninstall: 'jjplan uninstall',
   'project.ls': 'jjplan project ls',
   'project.rm': 'jjplan project rm <name>',
@@ -224,7 +224,7 @@ project (name, 主键) -- spec (id=ULID) -- task (id=ULID)
 # COMMANDS
 
 jjplan --help | --version
-jjplan self-update | uninstall          仅在用户明确要求时执行 (同时影响 jjask)
+jjplan update | upgrade | uninstall     仅在用户明确要求时执行 (同时影响 jjask; update/upgrade 等价)
 
 jjplan project ls
   -> [{name, created_at, updated_at, specs:[{...spec, tasks:[...task]}]}]
@@ -290,8 +290,8 @@ async function main(): Promise<void> {
     process.stdout.write(`${VERSION}\n`);
     return;
   }
-  if (argv[0] === 'self-update') {
-    if (argv.length > 1) failUsage('self-update', `unexpected argument ${argv[1]}`);
+  if (argv[0] === 'update' || argv[0] === 'upgrade') {
+    if (argv.length > 1) failUsage('update', `unexpected argument ${argv[1]}`);
     runInstaller(ENTRY, []);
     return;
   }

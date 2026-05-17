@@ -1,13 +1,17 @@
 name: release
 
 # Triggered by pushing a version tag (e.g. v0.1.0). Two independent jobs run
-# in parallel: deploy the Worker to Cloudflare, and compile the CLI binary
-# and attach it to the GitHub Release for that tag.
+# in parallel: deploy the Worker to Cloudflare, and compile the CLI binaries
+# and attach them to the GitHub Release for that tag.
 
 on:
   push:
     tags: ['v*']
   workflow_dispatch:
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   deploy-worker:
@@ -63,10 +67,6 @@ jobs:
 
       - uses: oven-sh/setup-bun@v2
 
-      - name: Install cli deps
-        working-directory: cli
-        run: bun install --frozen-lockfile || bun install
-
       - name: Verify VERSION matches tag
         run: |
           version="$(tr -d '[:space:]' < VERSION)"
@@ -76,16 +76,33 @@ jobs:
             exit 1
           fi
 
+      - name: Install cli deps
+        working-directory: cli
+        run: bun install --frozen-lockfile || bun install
+
       - name: Typecheck CLI
         working-directory: cli
         run: bun run typecheck
 
-      - name: Compile macOS arm64 binaries (jjplan + jjask)
+      - name: Compile macOS binaries (jjplan + jjask × x64 + arm64)
         working-directory: cli
         run: bun run build
+
+      - name: Generate SHA256 checksums
+        working-directory: cli/dist
+        run: |
+          shopt -s nullglob
+          files=( jjplan-macos-* jjask-macos-* )
+          [ ${#files[@]} -gt 0 ] || { echo "no build artifacts found in cli/dist" >&2; exit 1; }
+          sha256sum "${files[@]}" > checksums.txt
+          cat checksums.txt
 
       - name: Attach binaries to release
         uses: softprops/action-gh-release@v2
         with:
-          files: cli/dist/*-macos-arm64
+          generate_release_notes: true
           fail_on_unmatched_files: true
+          files: |
+            cli/dist/jjplan-macos-*
+            cli/dist/jjask-macos-*
+            cli/dist/checksums.txt

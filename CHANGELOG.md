@@ -1,6 +1,22 @@
 # Changelog
 
-本文件记录 jjplan 的版本变更, 格式参考 [Keep a Changelog](https://keepachangelog.com).
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/) + [SemVer](https://semver.org/).
+
+## [0.8.23] - 2026-05-17
+
+### Added
+
+- 二进制双架构 (macOS x64 + arm64); Release 附 `checksums.txt`, `install.sh` best-effort 校验, 并支持 `REPO` / `VERSION` / `INSTALL_DIR` 覆写.
+
+### Changed (BREAKING)
+
+- 子命令 `self-update` 更名为 `update` (`upgrade` 为别名), 与 [cli-template](https://github.com/yigegongjiang/cli-template) 对齐. 旧名不再识别.
+
+### Changed
+
+- CLI 构建抽到 `cli/build.ts`, finally 清 `*.bun-build`; 自更新加源码守护 (源码运行 `update` 直接拒绝, 走 install.sh 兜底).
+- CI 加 `concurrency: release-${ref}` + `generate_release_notes`; install URL 由 `JJ_REPO` 派生.
+- 文档体系对齐 cli-template: README / CLAUDE 加 AI-only 声明, deploy.md 四段化, CHANGELOG 加 SemVer 头 + compare 链接尾.
 
 ## [0.8.22] - 2026-05-17
 
@@ -281,3 +297,5 @@
 ### Changed
 
 - 重写 `jjplan --help` 输出, 使 AI 能从单次帮助调用完整掌握 CLI 能力: 数据模型 (project ⊃ spec ⊃ task)、I/O 协定 (stdin/stdout/exit code)、每命令意图与返回 JSON 形状、状态语义与流转、典型工作流示例、常见陷阱.
+
+[0.8.23]: https://github.com/yigegongjiang/jj-plan/compare/v0.8.22...v0.8.23

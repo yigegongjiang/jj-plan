@@ -3,14 +3,19 @@
 import { parseArgs } from 'node:util';
 import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { execSync } from 'node:child_process';
 
+// Injected by cli/build.ts at compile time via --define. In source-tree dev
+// they are undeclared; `typeof` falls back to VERSION/REPO source-tree defaults.
 declare const JJ_VERSION: string | undefined;
+declare const JJ_REPO: string | undefined;
 
 export const CONFIG_PATH = join(homedir(), '.jjplan', 'config.json');
-export const INSTALL_URL =
-  'https://raw.githubusercontent.com/yigegongjiang/jj-plan/main/install.sh';
+
+const REPO =
+  typeof JJ_REPO === 'string' && JJ_REPO.length > 0 ? JJ_REPO : 'yigegongjiang/jj-plan';
+export const INSTALL_URL = `https://raw.githubusercontent.com/${REPO}/main/install.sh`;
 
 export const SPEC_STATUSES = ['active', 'done'] as const;
 export const TASK_STATUSES = ['todo', 'doing', 'done', 'blocked'] as const;
@@ -201,10 +206,20 @@ export function requireId(
 // ─── installer ────────────────────────────────────────────────────────────
 
 export function runInstaller(entry: string, args: string[]): void {
+  const isUninstall = args.includes('--uninstall');
+  // Refuse update when the running executable is not the installed binary
+  // (e.g. `bun run src/jjplan.ts update` resolves execPath to bun itself).
+  // Uninstall is harmless — it just clears ~/.local/bin/<entry>, so allow it.
+  if (!isUninstall && basename(process.execPath) !== entry) {
+    die(
+      entry,
+      `refusing update: current executable is "${basename(process.execPath)}", expected "${entry}"; update only works on the installed binary, not when running from source via bun`,
+    );
+  }
   const suffix = args.length > 0 ? ` -s -- ${args.join(' ')}` : '';
   try {
     execSync(`curl -fsSL ${INSTALL_URL} | bash${suffix}`, { stdio: 'inherit' });
   } catch {
-    die(entry, args.includes('--uninstall') ? 'uninstall failed' : 'self-update failed');
+    die(entry, isUninstall ? 'uninstall failed' : 'update failed');
   }
 }
