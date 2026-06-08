@@ -1,14 +1,15 @@
-# Changelog
+# Changelog (developer)
 
-用户向发布记录; 开发向技术细节 (路径 / 函数 / 机制) 见 [CHANGELOG](./CHANGELOG). [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) + [SemVer](https://semver.org/).
+[CHANGELOG.md](./CHANGELOG.md) 的开发向超集: 每条用户向记录 1:1 镜像 + 缩进子项承载技术变更 (路径 / 函数 / 机制). 写法 → [llm-doc-style.md](./llm-doc-style.md). [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) + [SemVer](https://semver.org/).
 
-> 历史 27 版 (≤ 0.8.23) 在双文件分界确立前写成, 含文件/函数级细节, 原文照搬未回填; 用户向精简严格自 **0.8.24** 起执行.
+> 历史 27 版 (≤ 0.8.23) 在双文件分界确立前写成, 原文照搬未回填; 用户向 / 开发向严格分界自 **0.8.24** 起执行.
 
 ## [0.8.24] - 2026-06-08
 
 ### Changed
 
 - 文档体系对齐 cli-template: 全套双语化 (英文主版 + 中文镜像), 发布记录拆为用户向 / 开发向两份, 自本版起严格分界. CLI / Worker / Web 行为零变化.
+  - 新建 `llm-doc-style.{md,zh.md}` (文档写法单源); `CLAUDE.md` 内容重组进 `AGENTS.{md,zh.md}`, `CLAUDE.md` 转 symlink → `AGENTS.md`; `README.{md,zh.md}` / `deploy.{md,zh.md}` 转双语 (deploy 加 TL;DR + CHANGELOG 双文件镜像步骤 + amend/force-push 禁用条件); `CHANGELOG.md` 拆出开发向 `CHANGELOG`, 历史 27 版 (≤0.8.23) 原文未回填.
 
 ## [0.8.23] - 2026-05-17
 

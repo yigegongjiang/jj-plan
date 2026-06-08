@@ -1,33 +1,45 @@
-# 部署流程
+# Release flow
 
-push `v*` tag 触发 Actions: 部署 Worker + 编译 CLI 二进制 (jjplan + jjask × x64/arm64) 附 release.
+AI runs this on its own after finishing code changes. Pushing a `v*` tag triggers Actions: deploy the Worker + compile the CLI binaries (jjplan + jjask × x64/arm64) and attach them to the Release. Doc authoring → [llm-doc-style.md](./llm-doc-style.md). Chinese mirror → [deploy.zh.md](./deploy.zh.md).
 
-## 1. 验证
+## TL;DR
+
+1. `cd cli && bun run typecheck && bun run build` to verify; `--version` must equal root `VERSION`
+2. Bump `VERSION` + write the version into `CHANGELOG.md` (user-facing) **and** `CHANGELOG` (developer-facing) in lockstep → [llm-doc-style.md](./llm-doc-style.md)
+3. commit + push branch + tag (`-m`, signed-compatible) + push tag
+4. Bug in the just-released version → amend + delete remote tag + re-tag + force push
+
+## 1. Verify
 
 ```sh
 cd cli && bun run typecheck && bun run build && ./dist/jjplan-macos-arm64 --version
 ```
 
-`--version` 输出应等于根 `VERSION`. typecheck / build / version 任一失败直接退回.
+`--version` output must equal root `VERSION`. Any failure of typecheck / build / version → stop.
 
-## 2. 写版本
+## 2. Write the version
 
-- 版本号: 默认 PATCH; 新功能 → MINOR; 不兼容 → MAJOR.
-- 改 `VERSION` 文件 (唯一来源, CI 校验 `VERSION == tag (去 v)`, 不一致 fail).
-- `CHANGELOG.md` 顶部加 `## [X.Y.Z] - YYYY-MM-DD` 段, 按 Added / Changed / Fixed 分组写**面向用户**的精简摘要 (commit 详情由 Actions `generate_release_notes` 自动汇总). 底部补 `[X.Y.Z]: https://github.com/yigegongjiang/jj-plan/compare/vX.Y.Z-1...vX.Y.Z`.
+- Version number: bump PATCH by default; new feature → MINOR; breaking change → MAJOR.
+- Edit the `VERSION` file (single source; CI validates `VERSION == tag (minus the v)` and fails on mismatch).
+- Add a `## [X.Y.Z] - YYYY-MM-DD` section at the top of **`CHANGELOG.md`** with a concise user-facing summary grouped Added / Changed / Fixed (commit details are aggregated into the Release by Actions `generate_release_notes`). Append a `[X.Y.Z]:` compare link at the bottom.
+- Mirror that section into **`CHANGELOG`** (developer-facing): every entry 1:1 plus one indented sub-item carrying the technical change (paths / functions / mechanisms). Both files move together → [llm-doc-style.md](./llm-doc-style.md).
 
-## 3. 发布
+## 3. Publish
 
 ```sh
-git commit -m "X.Y.Z: <一句话>"
+git commit -m "X.Y.Z: <one-liner>"
 git push origin main
-git tag vX.Y.Z -m "X.Y.Z"   # tag.gpgsign=true, 必须带 message
+git tag vX.Y.Z -m "X.Y.Z"   # tag.gpgsign=true → MUST carry a message
 git push origin vX.Y.Z
 ```
 
-## 4. amend 修上版
+> Use a tag with a message (`-m`): `tag.gpgsign=true` force-upgrades a lightweight tag to signed but it would lack a message → fail.
 
-刚 push 的 tag 发现 bug / 文档冗余 / 改动指向同版本 → amend 同版本 retag, 不发新版:
+## 4. amend to fix a bug in the released version
+
+The just-pushed tag has a bug / doc redundancy / a change that points at the same version → amend and re-tag the same version, do NOT ship a new one.
+
+> **commit + tag must be updated together**: after amend the commit hash changes, but the remote tag still points at the old hash → the Release artifact diverges from main HEAD. Force-pushing the commit alone is not enough; the remote tag MUST be deleted and re-created, otherwise Actions won't re-run.
 
 ```sh
 git commit -a --amend --no-edit
@@ -38,4 +50,4 @@ git tag vX.Y.Z -m "X.Y.Z"
 git push origin vX.Y.Z
 ```
 
-Release 会被覆写, 旧二进制不可恢复.
+> The Release is overwritten; the old binaries are unrecoverable.
