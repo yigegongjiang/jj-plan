@@ -22,7 +22,7 @@ const USAGE = {
   version: 'jjask --version',
   update: 'jjask update | upgrade',
   uninstall: 'jjask uninstall',
-  'ask.new': 'jjask new <project> <body> [--origin <body>]',
+  'ask.new': 'jjask new <project> <body>',
   'ask.ls': `jjask ls <project> [--limit N]   (default ${ASK_LIMIT_DEFAULT}, max ${ASK_LIMIT_MAX})`,
   'ask.show': 'jjask show <id>',
   'ask.set': 'jjask set <id> --body <body>',
@@ -38,24 +38,14 @@ function failUsage(k: UsageKey, reason: string): never {
   dieUsage(ENTRY, USAGE[k], reason);
 }
 
-function parseAskNewArgs(args: string[]): {
-  project: string;
-  body: string;
-  origin?: string;
-} {
+function parseAskNewArgs(args: string[]): { project: string; body: string } {
   let project: string | undefined;
   let body: string | undefined;
-  let origin: string | undefined;
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     if (arg === undefined) continue;
-    if (arg === '--origin') {
-      if (origin !== undefined) failUsage('ask.new', 'duplicate --origin');
-      const v = args[++i];
-      if (typeof v !== 'string') failUsage('ask.new', 'missing <body> after --origin');
-      origin = v;
-    } else if (arg.startsWith('--')) {
+    if (arg.startsWith('--')) {
       failUsage('ask.new', `unknown option ${arg}`);
     } else if (project === undefined) {
       project = arg;
@@ -72,12 +62,7 @@ function parseAskNewArgs(args: string[]): {
   if (body.length === 0 || body.length > MAX_BODY_LEN) {
     failUsage('ask.new', `body length must be 1..${MAX_BODY_LEN}`);
   }
-  if (origin !== undefined && origin.length > MAX_BODY_LEN) {
-    failUsage('ask.new', `origin too long (max ${MAX_BODY_LEN} chars)`);
-  }
-  const out: { project: string; body: string; origin?: string } = { project, body };
-  if (origin !== undefined) out.origin = origin;
-  return out;
+  return { project, body };
 }
 
 function parseAskLsArgs(args: string[]): { project: string; limit?: number } {
@@ -145,10 +130,8 @@ type Handler = (rest: string[]) => Promise<void>;
 
 const commands: Record<string, Handler> = {
   async 'ask.new'(args) {
-    const { project, body, origin } = parseAskNewArgs(args);
-    const payload: { body: string; origin?: string } = { body };
-    if (origin !== undefined) payload.origin = origin;
-    print(await api(ENTRY, 'POST', `/projects/${encodeURIComponent(project)}/asks`, payload));
+    const { project, body } = parseAskNewArgs(args);
+    print(await api(ENTRY, 'POST', `/projects/${encodeURIComponent(project)}/asks`, { body }));
   },
 
   async 'ask.ls'(args) {
@@ -181,13 +164,13 @@ function printHelp(): void {
 jjask: 落盘人类抛给 AI 的请求 (Q&A 记录). 两层模型 project -> ask, id=ULID. <project>=cwd basename.
 每条 ask 都是独立记录, 不串链.
 
-  jjask new <project> <body> [--origin <原话>]
-    # 默认 body=原话原文照搬, 省 --origin (这是绝大多数情况). 仅当原话本身无法直接喂给后续 AI 执行 (缺主语/无指令/纯情绪宣泄/严重歧义 — 不是"口语化"也不是"含糊", 而是真的执行不了) 才允许改写; 此时 --origin MUST=原话, 且 body MUST 保留原话全部细节/信息/重点/约束/数字/路径/术语, 仅补足执行所需的缺失成分, 不删减/不抽象/不概括/不归纳/不润色. 拿不准就照搬原话.
+  jjask new <project> <body>
+    # body=用户原话原文照搬.
 
-输出: stdout 单行 JSON. body/origin 不读 stdin (位置/flag 参数). 查询/修改/删除见 jjask --help.
+输出: stdout 单行 JSON. body 不读 stdin (位置参数). 查询/修改/删除见 jjask --help.
 
 # PURPOSE
-落盘人类抛给 AI 的请求 (body + 可选 origin 原话).
+落盘人类抛给 AI 的请求.
 
 # MODEL
 project (name) -- ask (id=ULID)
@@ -197,23 +180,23 @@ project (name) -- ask (id=ULID)
 
 # I/O
 - 输出: stdout 单行 JSON; DELETE 空 (204). 错误: stderr \`jjask: <msg>\` + 非零 exit.
-- <body> / --origin / --body 全是位置/flag 参数, 不读 stdin.
-- 限长 (chars): body 1..${MAX_BODY_LEN}, origin 0..${MAX_BODY_LEN}, project 1..${MAX_PROJECT_NAME_LEN}.
+- <body> / --body 是位置/flag 参数, 不读 stdin.
+- 限长 (chars): body 1..${MAX_BODY_LEN}, project 1..${MAX_PROJECT_NAME_LEN}.
 
 # COMMANDS
 
 jjask --help | --version
 jjask update | upgrade | uninstall       仅在用户明确要求时执行 (同时影响 jjplan; update/upgrade 等价)
 
-jjask new <project> <body> [--origin <body>]
-  -> {id, project_id, body, origin, created_at, updated_at}
+jjask new <project> <body>
+  -> {id, project_id, body, created_at, updated_at}
 jjask ls <project> [--limit N]   (default ${ASK_LIMIT_DEFAULT}, max ${ASK_LIMIT_MAX}, by updated_at DESC)
   -> [{...ask}]
   err: 404
 jjask show <id>
   -> {...ask}
   err: 404
-jjask set <id> --body <body>     (origin 一经创建不可改)
+jjask set <id> --body <body>
   -> {...ask}
   err: 400 | 404
 jjask rm <id>

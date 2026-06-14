@@ -4,6 +4,12 @@
 
 > 历史 27 版 (≤ 0.8.23) 在双文件分界确立前写成, 含文件/函数级细节, 原文照搬未回填; 用户向精简严格自 **0.8.24** 起执行.
 
+## [0.8.25] - 2026-06-14
+
+### Changed (BREAKING)
+
+- `jjask new` 移除 `--origin` 参数, 只保留 `<body>` 位置参数; API 响应不再包含 `origin` 字段. DB 列保留, 老数据不受影响.
+
 ## [0.8.24] - 2026-06-08
 
 ### Changed
@@ -306,5 +312,6 @@
 
 - 重写 `jjplan --help` 输出, 使 AI 能从单次帮助调用完整掌握 CLI 能力: 数据模型 (project ⊃ spec ⊃ task)、I/O 协定 (stdin/stdout/exit code)、每命令意图与返回 JSON 形状、状态语义与流转、典型工作流示例、常见陷阱.
 
+[0.8.25]: https://github.com/yigegongjiang/jj-plan/compare/v0.8.24...v0.8.25
 [0.8.24]: https://github.com/yigegongjiang/jj-plan/compare/v0.8.23...v0.8.24
 [0.8.23]: https://github.com/yigegongjiang/jj-plan/compare/v0.8.22...v0.8.23

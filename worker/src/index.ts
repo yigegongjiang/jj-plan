@@ -54,7 +54,6 @@ interface AskRow {
   id: string;
   project_id: string;
   body: string;
-  origin: string;
   created_at: number;
   updated_at: number;
 }
@@ -229,7 +228,10 @@ async function readProject(db: D1Database, name: string) {
 }
 
 async function readAsk(db: D1Database, id: string) {
-  return db.prepare('SELECT * FROM asks WHERE id = ?').bind(id).first<AskRow>();
+  return db
+    .prepare('SELECT id, project_id, body, created_at, updated_at FROM asks WHERE id = ?')
+    .bind(id)
+    .first<AskRow>();
 }
 
 // Parent-bump statement factories. They only build the prepared statement;
@@ -813,7 +815,7 @@ app.delete('/tasks/:id', async (c) => {
 });
 
 // ---------- asks ----------
-// Flat per-project records: body + immutable origin. No chain.
+// Flat per-project records. No chain.
 
 function parseAskBody(raw: unknown): { ok: true; value: string } | { ok: false; error: string } {
   if (typeof raw !== 'string' || raw.length === 0) {
@@ -825,31 +827,17 @@ function parseAskBody(raw: unknown): { ok: true; value: string } | { ok: false; 
   return { ok: true, value: raw };
 }
 
-function parseAskOrigin(raw: unknown): { ok: true; value: string } | { ok: false; error: string } {
-  if (raw === undefined || raw === null) return { ok: true, value: '' };
-  if (typeof raw !== 'string') return { ok: false, error: 'origin must be string' };
-  if (raw.length > MAX_BODY_LEN) {
-    return { ok: false, error: `origin too long (max ${MAX_BODY_LEN} chars)` };
-  }
-  return { ok: true, value: raw };
-}
-
 app.post('/projects/:name/asks', async (c) => {
   const name = c.req.param('name');
   if (name.length === 0 || name.length > MAX_PROJECT_NAME_LEN) {
     return c.json({ error: `project name length must be 1..${MAX_PROJECT_NAME_LEN}` }, 400);
   }
 
-  const parsedBody = await parseJsonBody<{
-    body?: unknown;
-    origin?: unknown;
-  }>(c);
+  const parsedBody = await parseJsonBody<{ body?: unknown }>(c);
   if (!parsedBody.ok) return parsedBody.response;
 
   const bodyParsed = parseAskBody(parsedBody.value.body);
   if (!bodyParsed.ok) return c.json({ error: bodyParsed.error }, 400);
-  const originParsed = parseAskOrigin(parsedBody.value.origin);
-  if (!originParsed.ok) return c.json({ error: originParsed.error }, 400);
 
   const id = ulid();
   const t = now();
@@ -859,9 +847,9 @@ app.post('/projects/:name/asks', async (c) => {
       .bind(name, t, t),
     c.env.DB
       .prepare(
-        'INSERT INTO asks (id, project_id, body, origin, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
+        'INSERT INTO asks (id, project_id, body, created_at, updated_at) VALUES (?, ?, ?, ?, ?)',
       )
-      .bind(id, name, bodyParsed.value, originParsed.value, t, t),
+      .bind(id, name, bodyParsed.value, t, t),
     bumpProject(c.env.DB, name, t),
   ]);
   return c.json(await readAsk(c.env.DB, id), 201);
@@ -883,7 +871,9 @@ app.get('/projects/:name/asks', async (c) => {
   }
 
   const { results } = await c.env.DB
-    .prepare('SELECT * FROM asks WHERE project_id = ? ORDER BY updated_at DESC LIMIT ?')
+    .prepare(
+      'SELECT id, project_id, body, created_at, updated_at FROM asks WHERE project_id = ? ORDER BY updated_at DESC LIMIT ?',
+    )
     .bind(name, limit)
     .all<AskRow>();
   return c.json(results);
@@ -896,7 +886,7 @@ app.get('/asks/:id', async (c) => {
   return c.json(ask);
 });
 
-// Only body is patchable; origin is immutable.
+// Only body is patchable.
 app.patch('/asks/:id', async (c) => {
   const id = c.req.param('id');
   const parsedBody = await parseJsonBody<{ body?: unknown }>(c);

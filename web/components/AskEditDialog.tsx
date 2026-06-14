@@ -86,17 +86,6 @@ export default function AskEditDialog({
             />
           </label>
 
-          {ask.origin.length > 0 && (
-            <div className="block">
-              <div className="text-xs text-zinc-500 uppercase tracking-wider">
-                origin
-              </div>
-              <div className="mt-1.5 w-full px-3 py-2 rounded-md bg-zinc-900/60 border border-zinc-900 text-sm font-mono text-zinc-400 whitespace-pre-wrap break-words max-h-40 overflow-auto">
-                {ask.origin}
-              </div>
-            </div>
-          )}
-
           {errorMessage && (
             <div className="px-3 py-2 rounded-md border border-red-900 bg-red-950/40 text-red-300 text-xs">
               {errorMessage}

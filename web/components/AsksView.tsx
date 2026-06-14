@@ -76,16 +76,6 @@ function AskCard({
           {expanded ? '× collapse' : '▾ expand'}
         </button>
       )}
-      {ask.origin.length > 0 && (
-        <details className="text-[11px] text-zinc-500">
-          <summary className="cursor-pointer select-none hover:text-zinc-300">
-            origin
-          </summary>
-          <div className="mt-1 px-2 py-1.5 rounded bg-zinc-900/60 whitespace-pre-wrap break-words font-mono text-zinc-400">
-            {ask.origin}
-          </div>
-        </details>
-      )}
       <div className="mt-auto pt-1.5 flex items-center justify-between gap-2 border-t border-zinc-900">
         <span className="text-[11px] text-zinc-400 font-mono truncate">
           updated {fmtTime(ask.updated_at)}

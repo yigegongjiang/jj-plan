@@ -46,7 +46,6 @@ export interface Ask {
   id: string;
   project_id: string;
   body: string;
-  origin: string;
   created_at: number;
   updated_at: number;
 }

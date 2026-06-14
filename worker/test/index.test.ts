@@ -65,7 +65,6 @@ interface Ask {
   id: string;
   project_id: string;
   body: string;
-  origin: string;
   created_at: number;
   updated_at: number;
 }
@@ -170,7 +169,7 @@ async function rowCount(table: 'projects' | 'specs' | 'tasks' | 'asks'): Promise
 }
 
 async function newAsk(
-  payload: { body: string; origin?: string },
+  payload: { body: string },
   project: string = PROJECT,
 ): Promise<Ask> {
   const r = await jsonReq(`/projects/${project}/asks`, 'POST', payload);
@@ -1698,7 +1697,7 @@ describe('updated_at cascade and ordering', () => {
 });
 
 // =============================================================================
-// asks — flat per-project records (body + immutable origin). No chain.
+// asks — flat per-project records. No chain.
 // =============================================================================
 
 describe('POST /projects/:name/asks validation', () => {
@@ -1730,29 +1729,9 @@ describe('POST /projects/:name/asks validation', () => {
     expect((await r.json()).error).toMatch(/body too long/);
   });
 
-  it('treats missing origin as empty string', async () => {
+  it('ignores extra fields in payload', async () => {
     const a = await newAsk({ body: 'b' });
-    expect(a.origin).toBe('');
-  });
-
-  it('accepts origin at boundary length 65536', async () => {
-    const a = await newAsk({ body: 'b', origin: 'o'.repeat(65536) });
-    expect(a.origin.length).toBe(65536);
-  });
-
-  it('rejects origin at length 65537', async () => {
-    const r = await jsonReq(`/projects/${PROJECT}/asks`, 'POST', {
-      body: 'b',
-      origin: 'o'.repeat(65537),
-    });
-    expect(r.status).toBe(400);
-    expect((await r.json()).error).toMatch(/origin too long/);
-  });
-
-  it('rejects non-string origin', async () => {
-    const r = await jsonReq(`/projects/${PROJECT}/asks`, 'POST', { body: 'b', origin: 42 });
-    expect(r.status).toBe(400);
-    expect((await r.json()).error).toMatch(/origin must be string/);
+    expect(a.body).toBe('b');
   });
 
   it('upserts the project on first ask', async () => {
@@ -1816,34 +1795,30 @@ describe('GET /asks/:id', () => {
     expect(r.status).toBe(404);
   });
 
-  it('returns the ask body/origin', async () => {
-    const a = await newAsk({ body: 'b', origin: 'o' });
+  it('returns the ask body', async () => {
+    const a = await newAsk({ body: 'b' });
     const r = await authed(`/asks/${a.id}`);
     expect(r.status).toBe(200);
     const got = await r.json();
     expect(got.body).toBe('b');
-    expect(got.origin).toBe('o');
   });
 });
 
 describe('PATCH /asks/:id', () => {
-  it('changes body only; origin is immutable', async () => {
-    const a = await newAsk({ body: 'old', origin: 'kept' });
+  it('changes body', async () => {
+    const a = await newAsk({ body: 'old' });
     await tick();
     const r = await jsonReq(`/asks/${a.id}`, 'PATCH', { body: 'new' });
     expect(r.status).toBe(200);
     const updated = await r.json();
     expect(updated.body).toBe('new');
-    expect(updated.origin).toBe('kept');
     expect(updated.updated_at).toBeGreaterThan(a.updated_at);
   });
 
-  it('ignores unknown fields and rejects missing body', async () => {
-    const a = await newAsk({ body: 'old', origin: 'kept' });
-    const r1 = await jsonReq(`/asks/${a.id}`, 'PATCH', { origin: 'hack' });
-    expect(r1.status).toBe(400);
-    const r2 = await jsonReq(`/asks/${a.id}`, 'PATCH', {});
-    expect(r2.status).toBe(400);
+  it('rejects missing body', async () => {
+    const a = await newAsk({ body: 'old' });
+    const r = await jsonReq(`/asks/${a.id}`, 'PATCH', {});
+    expect(r.status).toBe(400);
   });
 
   it('404 on missing id', async () => {
