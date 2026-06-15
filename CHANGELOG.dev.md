@@ -1,8 +1,22 @@
-# Changelog (developer)
+```When Editing
+本文档作用: 面向开发者的发版记录; CHANGELOG.md 的超集, 1:1 镜像 + 技术变更子项
+遵循 AGENTS.md 文档编写规范
+- 每条主项 = CHANGELOG.md 对应条目 (原文), 下方缩进子项承载技术变更
+- 子项 MAY 写路径 / 函数 / 机制; ≤ 1 行
+```
 
-[CHANGELOG.md](./CHANGELOG.md) 的开发向超集: 每条用户向记录 1:1 镜像 + 缩进子项承载技术变更 (路径 / 函数 / 机制). 写法 → [llm-doc-style.md](./llm-doc-style.md). [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) + [SemVer](https://semver.org/).
+# Changelog (developer, follow [CHANGELOG.md](./CHANGELOG.md))
 
 > 历史 27 版 (≤ 0.8.23) 在双文件分界确立前写成, 原文照搬未回填; 用户向 / 开发向严格分界自 **0.8.24** 起执行.
+
+## [0.8.26] - 2026-06-15
+
+### Changed
+
+- 文档体系去双语化 + 精简: 删除全部 `.zh.md` 镜像 (AGENTS/README/deploy/llm-doc-style), AGENTS.md 改中文直写; `deploy.md` 合并重命名为 `workflow.md`; `llm-doc-style.md` 写作规范内联到 AGENTS.md; 旧 `CHANGELOG` (无扩展名) 删除. CLI / Worker / Web 行为零变化.
+  - 删除: `AGENTS.zh.md`, `README.zh.md`, `deploy.md`, `deploy.zh.md`, `llm-doc-style.md`, `llm-doc-style.zh.md`, `CHANGELOG` (无扩展名旧文件)
+  - 新建: `workflow.md` (合并 deploy.md 内容 + 调试段), `CHANGELOG.dev.md` (本文件, 从 0.8.24 起双文件分界)
+  - 重写: `AGENTS.md` 英文 → 中文, 路由指向 `workflow.md`; `README.md` 英文 → 中文精简版
 
 ## [0.8.25] - 2026-06-14
 

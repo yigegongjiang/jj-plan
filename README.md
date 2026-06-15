@@ -1,35 +1,33 @@
-# jjplan
+```When Editing
+本文档作用: 工程总览 (价值主张 / 使用 / 架构 / 结构); MUST NOT 写发布流程 (→ workflow.md) / LLM 约束 (→ AGENTS.md)
+遵循 AGENTS.md 文档编写规范
+- 章节按需增删, 只留项目真有的; 首行一行价值主张, MUST NOT 带 LLM 提示
+- 短并列项用表格; 可执行步骤 fenced + `#` 注释同行
+- NEVER 写「开发」段 (VibeCoding 不向人类解释 dev 命令)
+```
 
-A Spec/Task/Ask tracker built for AI (macOS only, x64 + arm64). Data lives in Cloudflare D1, exposed via a Worker; two local CLIs (`jjplan` + `jjask`) share one endpoint/token. Chinese mirror → [README.zh.md](./README.zh.md).
+# `jjplan`
 
-## Model
+AI 专用 Spec/Task/Ask 追踪系统 (macOS only, x64 + arm64). 数据存 Cloudflare D1 (Worker); 两个本地 CLI (`jjplan` + `jjask`) 共用 endpoint/token.
 
-- **Spec** — records plan intent. Three tiers: project -> spec -> task, id = ULID.
-- **Task** — breaks a spec down. Status: `todo` / `doing` / `blocked` / `done`. A spec may go `done` only after every task is `done`.
-- **Ask** — persists the requests humans throw at the AI (Q&A records); flat, not chained.
-
-## Install
+## 使用
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/yigegongjiang/jj-plan/main/install.sh | bash
 ```
 
-Installs both `jjplan` + `jjask` to `$HOME/.local/bin/` in one shot. Configure `~/.jjplan/config.json`:
+一键安装 `jjplan` + `jjask` 到 `$HOME/.local/bin/`. 配置 `~/.jjplan/config.json` 填入 `endpoint` + `token`. `jjplan --help` / `jjask --help` 查看命令; 浏览器访问 `endpoint` 打开 dashboard.
 
-```json
-{ "endpoint": "https://jjplan.<acct>.workers.dev", "token": "<password>" }
-```
+## 架构
 
-`wrangler secret put JJPLAN_TOKEN` puts the same token into the Worker.
+- **模型**: project -> spec -> task (ULID id); ask 按 project 扁平存储
+- **技术栈**: Bun CLI (TypeScript) + Cloudflare Worker (D1) + Next.js SPA (静态导出, Worker 托管)
 
-## Usage
+## 项目结构
 
-`jjplan --help` / `jjask --help`. Open `endpoint` in a browser for the dashboard.
-
-## Update / Uninstall
-
-`jjplan update` (= `upgrade`) updates both binaries; `uninstall` removes both, config kept.
-
-## Release
-
-Tag → Actions auto-builds + publishes → [deploy.md](./deploy.md).
+<!-- prettier-ignore -->
+| 目录 | 职责 |
+|---|---|
+| `cli/` | CLI 二进制 (`jjplan` + `jjask`), Bun + TypeScript |
+| `worker/` | Cloudflare Worker + D1 migrations |
+| `web/` | Next.js dashboard SPA (静态导出) |

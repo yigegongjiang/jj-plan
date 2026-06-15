@@ -1,8 +1,23 @@
+```When Editing
+本文档作用: 面向使用者的发版记录; 只写用户感受得到的变化, MUST NOT 写技术细节 (→ CHANGELOG.dev.md)
+遵循 AGENTS.md 文档编写规范
+- 写: 新功能 / 行为修复 / 体验 / 安全 / 命令迁移
+- MUST NOT 写: 文件路径 / 函数名 / 组件名 / 依赖包名 / 重构细节
+- 单条 ≤ 2 行, 单版本 ≤ 5 条; 段落: Added / Changed / Fixed / Removed / Security
+- 无用户可感知变化 → 占位: `跟随版本同步发布`
+```
+
 # Changelog
 
-用户向发布记录; 开发向技术细节 (路径 / 函数 / 机制) 见 [CHANGELOG](./CHANGELOG). [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) + [SemVer](https://semver.org/).
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/) + [SemVer](https://semver.org/).
 
 > 历史 27 版 (≤ 0.8.23) 在双文件分界确立前写成, 含文件/函数级细节, 原文照搬未回填; 用户向精简严格自 **0.8.24** 起执行.
+
+## [0.8.26] - 2026-06-15
+
+### Changed
+
+- 文档体系去双语化 + 精简: 删除全部 `.zh.md` 镜像 (AGENTS/README/deploy/llm-doc-style), AGENTS.md 改中文直写; `deploy.md` 合并重命名为 `workflow.md`; `llm-doc-style.md` 写作规范内联到 AGENTS.md; 旧 `CHANGELOG` (无扩展名) 删除. CLI / Worker / Web 行为零变化.
 
 ## [0.8.25] - 2026-06-14
 
@@ -312,6 +327,7 @@
 
 - 重写 `jjplan --help` 输出, 使 AI 能从单次帮助调用完整掌握 CLI 能力: 数据模型 (project ⊃ spec ⊃ task)、I/O 协定 (stdin/stdout/exit code)、每命令意图与返回 JSON 形状、状态语义与流转、典型工作流示例、常见陷阱.
 
+[0.8.26]: https://github.com/yigegongjiang/jj-plan/compare/v0.8.25...v0.8.26
 [0.8.25]: https://github.com/yigegongjiang/jj-plan/compare/v0.8.24...v0.8.25
 [0.8.24]: https://github.com/yigegongjiang/jj-plan/compare/v0.8.23...v0.8.24
 [0.8.23]: https://github.com/yigegongjiang/jj-plan/compare/v0.8.22...v0.8.23

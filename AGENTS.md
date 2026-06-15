@@ -1,27 +1,40 @@
 # AGENTS
 
-`jjplan`: a rock-stable Spec/Task/Ask tracker for AI (macOS only). Project overview → [README.md](./README.md); release flow → [deploy.md](./deploy.md); doc authoring → [llm-doc-style.md](./llm-doc-style.md). Chinese mirror → [AGENTS.zh.md](./AGENTS.zh.md).
+> 当前 project 是 AI Only 工程，人类输入的所有需求，都需要 AI(Claude Code、Codex...) 自主完成后续的所有工作。
+> 默认 MUST(必须强制遵守); 仅例外用 SHOULD/MAY/MUST NOT/NEVER 标注。
 
-## Workflow (AI-only)
+## 指令路由（MUST）
 
-- Code / test / build / deploy / release decisions are all executed by Claude Code or Codex; humans do not develop here
-- Design decisions (architecture / selection / directory / naming / dependencies) follow AI judgment; MUST NOT force human conventions / best practices unless that convention is itself the AI's own optimum
-- MUST NOT ask back unless necessary; decide and execute directly (deploy / technical choices / doc sync / version number / changelog)
-- User role = trigger + online acceptance (via the Cloudflare URL); MUST NOT pull humans into the design loop
-- Version: bump PATCH by default; new feature → MINOR; breaking → MAJOR. Unless told "no push", push + tag per [deploy.md](./deploy.md)
-- Dissatisfied with the just-shipped version → `git commit --amend` + force push + re-tag the same tag (see deploy.md §4)
+- 【MUST】代码 / 架构 / 命令 / 结构 → [README.md](./README.md)
+- 【MUST】调试 / 版本 / changelog / git commit+push / 预部署+发布 → [workflow.md](./workflow.md)
 
-## Doc constraints
+## 工作模式 (MUST、AI-only)
 
-- All docs (README / CHANGELOG / deploy / AGENTS / comments) MUST be concise, focused, zero redundancy — one line over two, a list over a paragraph, no fluff
-- Style spec → [llm-doc-style.md](./llm-doc-style.md); when reviewing, MUST check against the "Anti-patterns" section
-- All readers are AI/LLM — optimize for high-quality machine comprehension, not human reading comfort
+- 【MUST】代码 / 测试 / 构建 / 部署 / 发布 全部由 AI(Claude Code、Codex、...) 执行，人类仅输入原始需求 + 需求完成后的验收
+- 【MUST】workflow.md 中的所有操作（git push / deploy / publish 等）已预授权，AI 直接执行，MUST NOT 等待人类确认
+- 【MUST】决策 (架构 / 选型 / 命名 / 依赖 / ...) 需 AI 自行抉择, MUST NOT 拉人类进设计回路，MUST NOT 反问人类
+- 【MUST】决策前通过各种方式（本工程检索、在线检索、其他途径）获取项目/需求事实，根据事实进行最优决策
 
-## Hard rules
+## 工作流程
 
-- **Stability first**: `jjplan` is a rock-stable plan system; stability outranks feature expansion / UI quality / architecture abstraction / refactoring. Fix defects and edges before adding abstractions
-- **Contract vs internals**: CLI/API behavior is a stable contract; data structures are internal. Confirm current behavior before changing, stay compatible after
-- **Self-hosting**: maintaining this repo MUST go through `jjplan` itself (create/break-down/track its own Spec/Task) — not in chat or scattered md. Friction = a defect, fix it first
-- **Boundaries**: no product model beyond Spec/Task/Ask unless the user explicitly asks; no extra runtime / service shape / storage / background daemon; stable, narrow, maintainable is the default — MUST NOT widen scope for "completeness"
-- **Platform**: macOS only (x64 + arm64); other OS/arch are actively rejected by `install.sh` and `update`
-- **Version consistency**: the root `VERSION` file is the single source; `cli/build.ts` injects it into the binary as `JJ_VERSION`; the first Actions step validates `VERSION == tag (minus the v)` and fails on mismatch
+1. 分析人类输入的原始需求
+2. AI 抉择并执行后续工作；开发过程中按需走 [workflow.md#调试](./workflow.md) 验证变更
+3. 执行 [workflow.md#发布](./workflow.md) 完整流程；未发布上线 = 需求未完成，MUST NOT 在发布完成前停止
+
+## 文档编写规范
+
+- 全部文档只供 AI 查看，MUST 简洁精炼, 零冗余; MUST NOT 废话填充
+- 能一行不写两行, 能一个单词不写两个单词, 能列表不写段落; 短句; `->` `/` `+` 替连接词
+- 强度词: MUST / MUST NOT / SHOULD / MAY / NEVER
+- 单一信源: 跨文档用 link 引用, MUST NOT 复述事实
+- AGENTS 只写 LLM 约束, MUST NOT 塞工程说明 / 命令 / 安装
+- 本段 = 全局写作标准; 其他 md 的 When Editing 仅补充各自特有约束
+
+## 硬性规则
+
+- **稳定优先**: `jjplan` 是 rock-stable plan system; 稳定性优先于功能扩展 / UI 质量 / 架构抽象 / 重构
+- **契约 vs 内部**: CLI/API 行为 = 稳定契约; 数据结构 = 内部实现. 变更前确认当前行为, 变更后保持兼容
+- **自举**: 维护本仓库 MUST 通过 `jjplan` 自身 (创建/拆解/追踪 Spec/Task), 不在 chat 或散落 md 中; 摩擦 = 缺陷, 优先修复
+- **边界**: 不引入 Spec/Task/Ask 之外的产品模型 (除非用户明确要求); 不加额外运行时 / 服务形态 / 存储 / 后台守护; 默认稳定、窄、可维护
+- **平台**: macOS only (x64 + arm64); `install.sh` 和 `update` 主动拒绝其他 OS/arch
+- **版本一致性**: 根目录 `VERSION` 文件 = 唯一信源; `cli/build.ts` 注入二进制为 `JJ_VERSION`; Actions 首步校验 `VERSION == tag (去 v)`, 不一致则失败
