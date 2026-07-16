@@ -100,6 +100,13 @@ export const api = {
     return request<Ask[]>(t, 'GET', `/projects/${encodeURIComponent(project)}/asks${q}`);
   },
 
+  // Cross-project keyword search over ask bodies. Empty query yields [].
+  searchAsks: (t: string, query: string, limit?: number) => {
+    const params = new URLSearchParams({ q: query });
+    if (limit !== undefined) params.set('limit', String(limit));
+    return request<Ask[]>(t, 'GET', `/asks?${params.toString()}`);
+  },
+
   patchAsk: (t: string, id: string, body: { body: string }) =>
     request<Ask>(t, 'PATCH', `/asks/${encodeURIComponent(id)}`, body),
 

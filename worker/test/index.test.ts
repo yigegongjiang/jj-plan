@@ -188,6 +188,18 @@ async function listAsks(project: string = PROJECT, limit?: number): Promise<Ask[
   return r.json();
 }
 
+async function searchAsks(q?: string, limit?: number): Promise<Ask[]> {
+  const params = new URLSearchParams();
+  if (q !== undefined) params.set('q', q);
+  if (limit !== undefined) params.set('limit', String(limit));
+  const qs = params.toString();
+  const r = await authed(`/asks${qs ? `?${qs}` : ''}`);
+  if (r.status !== 200) {
+    throw new Error(`searchAsks failed: ${r.status} ${await r.text()}`);
+  }
+  return r.json();
+}
+
 // Date.now() resolution is 1 ms. Two consecutive inserts can land in the same
 // millisecond, which makes "ORDER BY created_at DESC" non-deterministic. tick()
 // nudges the clock between operations whose ordering we want to assert.
@@ -257,6 +269,7 @@ describe('auth', () => {
     { method: 'DELETE', path: '/tasks/anything', hasBody: false },
     { method: 'GET', path: '/projects/anything/asks', hasBody: false },
     { method: 'POST', path: '/projects/anything/asks', hasBody: true },
+    { method: 'GET', path: '/asks', hasBody: false },
     { method: 'GET', path: '/asks/anything', hasBody: false },
     { method: 'PATCH', path: '/asks/anything', hasBody: true },
     { method: 'DELETE', path: '/asks/anything', hasBody: false },
@@ -1786,6 +1799,82 @@ describe('GET /projects/:name/asks', () => {
     expect((await authed(`/projects/${PROJECT}/asks?limit=0`)).status).toBe(400);
     expect((await authed(`/projects/${PROJECT}/asks?limit=101`)).status).toBe(400);
     expect((await authed(`/projects/${PROJECT}/asks?limit=foo`)).status).toBe(400);
+  });
+});
+
+describe('GET /asks (cross-project search)', () => {
+  it('empty / whitespace-only / missing query returns []', async () => {
+    await newAsk({ body: 'hello world' });
+    expect(await searchAsks()).toEqual([]);
+    expect(await searchAsks('')).toEqual([]);
+    expect(await searchAsks('   ')).toEqual([]);
+  });
+
+  it('single term matches across all projects', async () => {
+    await newAsk({ body: 'deploy the worker' }, 'alpha');
+    await newAsk({ body: 'worker crashed' }, 'beta');
+    await newAsk({ body: 'unrelated note' }, 'gamma');
+    const hits = await searchAsks('worker');
+    expect(hits.map((a) => a.project_id).sort()).toEqual(['alpha', 'beta']);
+  });
+
+  it('multi-word query ANDs terms (all must appear, any order)', async () => {
+    await newAsk({ body: 'fix the login bug' });
+    await newAsk({ body: 'bug in logout' });
+    const hits = await searchAsks('bug login');
+    expect(hits).toHaveLength(1);
+    expect(hits[0]?.body).toBe('fix the login bug');
+  });
+
+  it('ASCII match is case-insensitive', async () => {
+    await newAsk({ body: 'Deploy Worker' });
+    expect((await searchAsks('deploy')).length).toBe(1);
+    expect((await searchAsks('WORKER')).length).toBe(1);
+  });
+
+  it('matches CJK substrings', async () => {
+    await newAsk({ body: '给首页加一个检索入口' });
+    await newAsk({ body: '无关内容' });
+    const hits = await searchAsks('检索');
+    expect(hits).toHaveLength(1);
+    expect(hits[0]?.body).toBe('给首页加一个检索入口');
+  });
+
+  it('treats LIKE wildcards in the query as literals', async () => {
+    await newAsk({ body: '100% done' });
+    await newAsk({ body: '100 tasks left' });
+    // '%' must match a literal percent sign, not "any run of chars".
+    const pct = await searchAsks('100%');
+    expect(pct.map((a) => a.body)).toEqual(['100% done']);
+    // '_' must match a literal underscore, not "any single char".
+    await newAsk({ body: 'a_b snippet' });
+    await newAsk({ body: 'axb other' });
+    const us = await searchAsks('a_b');
+    expect(us.map((a) => a.body)).toEqual(['a_b snippet']);
+  });
+
+  it('orders matches by updated_at DESC', async () => {
+    await newAsk({ body: 'match one' });
+    await tick();
+    await newAsk({ body: 'match two' });
+    await tick();
+    await newAsk({ body: 'match three' });
+    const hits = await searchAsks('match');
+    expect(hits.map((a) => a.body)).toEqual(['match three', 'match two', 'match one']);
+  });
+
+  it('default limit caps results at 50', async () => {
+    for (let i = 0; i < 55; i++) await newAsk({ body: `match ${i}` });
+    expect((await searchAsks('match')).length).toBe(50);
+  });
+
+  it('honors explicit limit; accepts boundary 200; rejects out-of-range', async () => {
+    for (let i = 0; i < 5; i++) await newAsk({ body: `match ${i}` });
+    expect((await searchAsks('match', 2)).length).toBe(2);
+    expect((await authed('/asks?q=match&limit=200')).status).toBe(200);
+    expect((await authed('/asks?q=match&limit=0')).status).toBe(400);
+    expect((await authed('/asks?q=match&limit=201')).status).toBe(400);
+    expect((await authed('/asks?q=match&limit=foo')).status).toBe(400);
   });
 });
 

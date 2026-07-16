@@ -61,6 +61,13 @@ interface AskRow {
 const ASK_LIMIT_DEFAULT = 3;
 const ASK_LIMIT_MAX = 100;
 
+// Cross-project ask search: separate, more generous bounds than the per-project
+// list above. A keyword search wants to surface many matches at once; the cap
+// keeps the payload bounded as the ask store grows.
+const ASK_SEARCH_LIMIT_DEFAULT = 50;
+const ASK_SEARCH_LIMIT_MAX = 200;
+const ASK_SEARCH_MAX_TERMS = 16;
+
 const app = new Hono<{ Bindings: Bindings }>();
 
 // ---------- middleware ----------
@@ -875,6 +882,50 @@ app.get('/projects/:name/asks', async (c) => {
       'SELECT id, project_id, body, created_at, updated_at FROM asks WHERE project_id = ? ORDER BY updated_at DESC LIMIT ?',
     )
     .bind(name, limit)
+    .all<AskRow>();
+  return c.json(results);
+});
+
+// Escape LIKE metacharacters so a user's literal '%' / '_' / '\' match
+// themselves instead of acting as wildcards. Backslash first (it is the
+// ESCAPE char), then the two wildcards. Pairs with `ESCAPE '\'` in the query.
+function escapeLike(term: string): string {
+  return term.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
+}
+
+// Cross-project keyword search over ask bodies. Substring LIKE scan — no FTS,
+// no index: the ask store is a personal Q&A log, so a table scan stays cheap at
+// realistic sizes and `LIKE '%term%'` could not use an index anyway. Whitespace
+// splits the query into terms that are AND-ed (all must appear). An empty query
+// returns [] — a search box with no keyword matches nothing, not everything.
+//
+// Auth: covered by the `/asks/*` middleware, which also matches the bare
+// `/asks` path (same Hono wildcard behaviour that authenticates `/projects`).
+app.get('/asks', async (c) => {
+  const rawQ = c.req.query('q') ?? '';
+  const terms = rawQ
+    .split(/\s+/)
+    .filter((t) => t.length > 0)
+    .slice(0, ASK_SEARCH_MAX_TERMS);
+  if (terms.length === 0) return c.json([]);
+
+  const rawLimit = c.req.query('limit');
+  let limit = ASK_SEARCH_LIMIT_DEFAULT;
+  if (rawLimit !== undefined) {
+    const n = Number(rawLimit);
+    if (!Number.isInteger(n) || n < 1 || n > ASK_SEARCH_LIMIT_MAX) {
+      return c.json({ error: `limit must be integer in 1..${ASK_SEARCH_LIMIT_MAX}` }, 400);
+    }
+    limit = n;
+  }
+
+  const where = terms.map(() => "body LIKE ? ESCAPE '\\'").join(' AND ');
+  const params = terms.map((t) => `%${escapeLike(t)}%`);
+  const { results } = await c.env.DB
+    .prepare(
+      `SELECT id, project_id, body, created_at, updated_at FROM asks WHERE ${where} ORDER BY updated_at DESC LIMIT ?`,
+    )
+    .bind(...params, limit)
     .all<AskRow>();
   return c.json(results);
 });

@@ -9,6 +9,15 @@
 
 > 历史 27 版 (≤ 0.8.23) 在双文件分界确立前写成, 原文照搬未回填; 用户向 / 开发向严格分界自 **0.8.24** 起执行.
 
+## [0.9.0] - 2026-07-16
+
+### Added
+
+- Dashboard 首页新增 jjask 全局检索: 输入关键词 (空格分隔即多词 AND) 实时检索跨全部 project 的 ask, 命中词高亮, 点击结果直达所属 project 的 asks.
+  - Worker: 新增 `GET /asks?q=&limit=` — 空白拆词 AND (`body LIKE ? ESCAPE '\'`, 上限 16 词), `escapeLike` 转义 `\ % _`, 显式列名 (无 origin), `ORDER BY updated_at DESC`, limit 默认 50 / 上限 200; 空 q 返回 `[]`; 认证复用 `/asks/*` 中间件 (Hono 通配符亦匹配裸 `/asks`).
+  - Worker tests: auth cases 加 `GET /asks`; 新增 `describe(GET /asks search)` 9 例 (空q / 跨project / 多词AND / ASCII大小写 / CJK子串 / LIKE通配符转义 / 排序 / limit 边界).
+  - Web: `api.searchAsks`; 新组件 `AskSearch.tsx` (250ms 防抖 + `reqIdRef` 防乱序 + 正则高亮 `<mark>` + project chip 跳转前预写 ASKS tab + IME 组合输入感知: 组合中不检索, `isComposing` 时 Escape 不误清); `Dashboard` home 用 `AskSearch` 包 `ProjectsList` 作 fallback; `ProjectTabs` 导出 `PROJECT_TAB_STORAGE_KEY`; `types.ts` 加 `ASK_SEARCH_LIMIT_*`; `next.config.mjs` dev rewrite 加裸 `/asks`.
+
 ## [0.8.26] - 2026-06-15
 
 ### Changed
@@ -332,6 +341,8 @@
 
 - 重写 `jjplan --help` 输出, 使 AI 能从单次帮助调用完整掌握 CLI 能力: 数据模型 (project ⊃ spec ⊃ task)、I/O 协定 (stdin/stdout/exit code)、每命令意图与返回 JSON 形状、状态语义与流转、典型工作流示例、常见陷阱.
 
+[0.9.0]: https://github.com/yigegongjiang/jj-plan/compare/v0.8.26...v0.9.0
+[0.8.26]: https://github.com/yigegongjiang/jj-plan/compare/v0.8.25...v0.8.26
 [0.8.25]: https://github.com/yigegongjiang/jj-plan/compare/v0.8.24...v0.8.25
 [0.8.24]: https://github.com/yigegongjiang/jj-plan/compare/v0.8.23...v0.8.24
 [0.8.23]: https://github.com/yigegongjiang/jj-plan/compare/v0.8.22...v0.8.23

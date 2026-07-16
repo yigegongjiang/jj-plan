@@ -26,6 +26,7 @@ const config = isProd
           { source: "/projects/:p*", destination: `${REMOTE}/projects/:p*` },
           { source: "/specs/:p*", destination: `${REMOTE}/specs/:p*` },
           { source: "/tasks/:p*", destination: `${REMOTE}/tasks/:p*` },
+          { source: "/asks", destination: `${REMOTE}/asks` },
           { source: "/asks/:p*", destination: `${REMOTE}/asks/:p*` },
         ];
       },

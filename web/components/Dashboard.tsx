@@ -15,6 +15,7 @@ import {
   type TaskStatus,
 } from '@/lib/types';
 import AskEditDialog from './AskEditDialog';
+import AskSearch from './AskSearch';
 import AsksView from './AsksView';
 import ConfirmDialog from './ConfirmDialog';
 import EditDialog, { type EditDraft } from './EditDialog';
@@ -512,25 +513,32 @@ export default function Dashboard() {
             loading…
           </div>
         ) : route.kind === 'home' ? (
-          <ProjectsList
-            projects={projects}
-            onOpen={(name) => navigate({ kind: 'project', project: name })}
-            onRename={(p) => {
-              setRenameError(null);
-              setRename(p);
-            }}
-            onDelete={(p) => {
-              const taskCount = p.specs.reduce(
-                (n, s) => n + s.tasks.length,
-                0,
-              );
-              setDel({
-                kind: 'project',
-                name: p.name,
-                specCount: p.specs.length,
-                taskCount,
-              });
-            }}
+          <AskSearch
+            token={token}
+            onOpenProject={(name) => navigate({ kind: 'project', project: name })}
+            onUnauthorized={fallbackToLogin}
+            fallback={
+              <ProjectsList
+                projects={projects}
+                onOpen={(name) => navigate({ kind: 'project', project: name })}
+                onRename={(p) => {
+                  setRenameError(null);
+                  setRename(p);
+                }}
+                onDelete={(p) => {
+                  const taskCount = p.specs.reduce(
+                    (n, s) => n + s.tasks.length,
+                    0,
+                  );
+                  setDel({
+                    kind: 'project',
+                    name: p.name,
+                    specCount: p.specs.length,
+                    taskCount,
+                  });
+                }}
+              />
+            }
           />
         ) : route.kind === 'project' && activeProject ? (
           <ProjectTabs

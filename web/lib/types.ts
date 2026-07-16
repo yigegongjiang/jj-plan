@@ -42,6 +42,10 @@ export interface Project {
 export const ASK_LIMIT_DEFAULT = 3;
 export const ASK_LIMIT_MAX = 100;
 
+// Cross-project ask search (GET /asks?q=). Mirrors the worker's search bounds.
+export const ASK_SEARCH_LIMIT_DEFAULT = 50;
+export const ASK_SEARCH_LIMIT_MAX = 200;
+
 export interface Ask {
   id: string;
   project_id: string;

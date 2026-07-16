@@ -2,7 +2,10 @@
 
 import { useEffect, useState, type ReactNode } from 'react';
 
-const STORAGE_KEY = 'jjplan_project_tab';
+// Exported so other entry points (e.g. an ask-search result click) can preselect
+// the tab this component reads on mount.
+export const PROJECT_TAB_STORAGE_KEY = 'jjplan_project_tab';
+const STORAGE_KEY = PROJECT_TAB_STORAGE_KEY;
 type Tab = 'plans' | 'asks';
 const DEFAULT_TAB: Tab = 'plans';
 
