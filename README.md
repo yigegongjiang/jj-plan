@@ -22,7 +22,7 @@ curl -fsSL https://raw.githubusercontent.com/yigegongjiang/jj-plan/main/install.
 
 - **模型**: project -> spec -> task (ULID id); ask 按 project 扁平存储
 - **技术栈**: Bun CLI (TypeScript) + Cloudflare Worker (D1) + Next.js SPA (静态导出, Worker 托管)
-- **认证**: dashboard 经 Cloudflare Access (Google SSO, 无密码); CLI 用 bearer token 或 Cloudflare Access service token (headless); Worker 对受保护路由双认证 (bearer == `JJPLAN_TOKEN` 或校验 Access JWT), 任一通过即放行; endpoint 指向 workers.dev (bearer) 或自定义域 (Access)
+- **认证**: dashboard 经 Cloudflare Access (Google SSO, 无密码); CLI 用 bearer token 或 Cloudflare Access service token (headless); Worker 对受保护路由双认证 (bearer == `JJPLAN_TOKEN` 或校验 Access JWT), 任一通过即放行; endpoint 指向受 Access 保护的自定义域 (workers.dev 旁路入口已关闭)
 
 ## 项目结构
 

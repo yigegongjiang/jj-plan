@@ -9,6 +9,14 @@
 
 > 历史 27 版 (≤ 0.8.23) 在双文件分界确立前写成, 原文照搬未回填; 用户向 / 开发向严格分界自 **0.8.24** 起执行.
 
+## [0.13.0] - 2026-07-17
+
+### Security
+
+- 关闭 workers.dev 旁路入口 (`jjplan.fan-yang2019.workers.dev` 生产 + `*-` 预览): 该入口绕过 Cloudflare Access 仅 bearer 兜底; 现统一只经受 Access 保护的自定义域访问, 自定义域不受影响。
+  - `worker/wrangler.toml`: `workers_dev = false` (生产 `<name>.workers.dev` 路由) + `preview_urls = false` (`<version>-<name>.workers.dev` 预览 URL); 下次部署即禁用两者。放进 IaC 而非仅面板切换 —— 面板 off 会被下次 tag 部署按 wrangler 默认 (true) 重置。
+  - `README.md`: 架构「认证」项去掉 "endpoint 指向 workers.dev" 过时描述, 仅留受 Access 保护的自定义域。
+
 ## [0.12.0] - 2026-07-17
 
 ### Changed
