@@ -16,15 +16,16 @@ export class ApiError extends Error {
   }
 }
 
+// No Authorization header: the browser authenticates via the Cloudflare Access
+// session cookie (CF_Authorization), sent automatically on same-origin requests
+// once the human clears Google SSO at the edge. The Worker validates it. The
+// CLI (jjplan / jjask) is the only client that still sends a bearer token.
 async function request<T>(
-  token: string,
   method: 'GET' | 'POST' | 'PATCH' | 'DELETE',
   path: string,
   body?: unknown,
 ): Promise<T> {
-  const headers: Record<string, string> = {
-    Authorization: `Bearer ${token}`,
-  };
+  const headers: Record<string, string> = {};
   const init: RequestInit = { method, headers };
   if (body !== undefined) {
     headers['content-type'] = 'application/json';
@@ -73,43 +74,43 @@ export interface TaskPatch {
 }
 
 export const api = {
-  listProjects: (t: string) => request<Project[]>(t, 'GET', '/projects'),
+  listProjects: () => request<Project[]>('GET', '/projects'),
 
-  deleteProject: (t: string, name: string) =>
-    request<null>(t, 'DELETE', `/projects/${encodeURIComponent(name)}`),
+  deleteProject: (name: string) =>
+    request<null>('DELETE', `/projects/${encodeURIComponent(name)}`),
 
-  renameProject: (t: string, oldName: string, newName: string) =>
-    request<Project>(t, 'PATCH', `/projects/${encodeURIComponent(oldName)}`, {
+  renameProject: (oldName: string, newName: string) =>
+    request<Project>('PATCH', `/projects/${encodeURIComponent(oldName)}`, {
       new_name: newName,
     }),
 
-  patchSpec: (t: string, id: string, body: SpecPatch) =>
-    request<Spec>(t, 'PATCH', `/specs/${encodeURIComponent(id)}`, body),
+  patchSpec: (id: string, body: SpecPatch) =>
+    request<Spec>('PATCH', `/specs/${encodeURIComponent(id)}`, body),
 
-  deleteSpec: (t: string, id: string) =>
-    request<null>(t, 'DELETE', `/specs/${encodeURIComponent(id)}`),
+  deleteSpec: (id: string) =>
+    request<null>('DELETE', `/specs/${encodeURIComponent(id)}`),
 
-  patchTask: (t: string, id: string, body: TaskPatch) =>
-    request<Task>(t, 'PATCH', `/tasks/${encodeURIComponent(id)}`, body),
+  patchTask: (id: string, body: TaskPatch) =>
+    request<Task>('PATCH', `/tasks/${encodeURIComponent(id)}`, body),
 
-  deleteTask: (t: string, id: string) =>
-    request<null>(t, 'DELETE', `/tasks/${encodeURIComponent(id)}`),
+  deleteTask: (id: string) =>
+    request<null>('DELETE', `/tasks/${encodeURIComponent(id)}`),
 
-  listAsks: (t: string, project: string, limit?: number) => {
+  listAsks: (project: string, limit?: number) => {
     const q = limit !== undefined ? `?limit=${limit}` : '';
-    return request<Ask[]>(t, 'GET', `/projects/${encodeURIComponent(project)}/asks${q}`);
+    return request<Ask[]>('GET', `/projects/${encodeURIComponent(project)}/asks${q}`);
   },
 
   // Cross-project keyword search over ask bodies. Empty query yields [].
-  searchAsks: (t: string, query: string, limit?: number) => {
+  searchAsks: (query: string, limit?: number) => {
     const params = new URLSearchParams({ q: query });
     if (limit !== undefined) params.set('limit', String(limit));
-    return request<Ask[]>(t, 'GET', `/asks?${params.toString()}`);
+    return request<Ask[]>('GET', `/asks?${params.toString()}`);
   },
 
-  patchAsk: (t: string, id: string, body: { body: string }) =>
-    request<Ask>(t, 'PATCH', `/asks/${encodeURIComponent(id)}`, body),
+  patchAsk: (id: string, body: { body: string }) =>
+    request<Ask>('PATCH', `/asks/${encodeURIComponent(id)}`, body),
 
-  deleteAsk: (t: string, id: string) =>
-    request<null>(t, 'DELETE', `/asks/${encodeURIComponent(id)}`),
+  deleteAsk: (id: string) =>
+    request<null>('DELETE', `/asks/${encodeURIComponent(id)}`),
 };

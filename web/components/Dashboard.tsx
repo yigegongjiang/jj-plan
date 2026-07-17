@@ -25,8 +25,6 @@ import SpecDetail from './SpecDetail';
 import ProjectTabs from './ProjectTabs';
 import SpecsView from './SpecsView';
 
-const STORAGE_KEY = 'jjplan_token';
-
 type EditTarget =
   | { kind: 'spec'; spec: Spec }
   | { kind: 'task'; task: Task }
@@ -71,13 +69,10 @@ function routeToUrl(route: Route): string {
 }
 
 export default function Dashboard() {
-  const [token, setToken] = useState<string>('');
-  const [draftToken, setDraftToken] = useState<string>('');
   const [hydrated, setHydrated] = useState(false);
   const [projects, setProjects] = useState<Project[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [loginError, setLoginError] = useState<string | null>(null);
   const [edit, setEdit] = useState<EditTarget | null>(null);
   const [editError, setEditError] = useState<string | null>(null);
   const [del, setDel] = useState<DeleteTarget | null>(null);
@@ -89,13 +84,13 @@ export default function Dashboard() {
   const [asks, setAsks] = useState<Ask[] | null>(null);
   const [asksProject, setAsksProject] = useState<string | null>(null);
 
-  // Hydrate from localStorage + URL once on mount.
+  // Hydrate the route from the URL once on mount. Auth is enforced at the edge
+  // by Cloudflare Access (Google SSO); the browser carries the Access session
+  // cookie automatically, so there is no token to read and no login form.
   // 自制 SPA 路由: 浏览器不会自动管 scrollY, 用 history.state 自己存,
   // popstate 时双 rAF 等新视图 layout 完成再 scrollTo, 否则会被 clamp.
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const saved = window.localStorage.getItem(STORAGE_KEY);
-    if (saved) setToken(saved);
     setRoute(readRoute());
     setHydrated(true);
     const prevRestoration = window.history.scrollRestoration;
@@ -129,15 +124,15 @@ export default function Dashboard() {
     setRoute(next);
   }, []);
 
-  // 401 falls back to login screen so a stale token isn't used silently.
-  // Also wipes asks cache so a re-login under the same URL refetches instead
-  // of showing the previous session's data until the next 5s tick.
-  const fallbackToLogin = useCallback(() => {
-    if (typeof window !== 'undefined') {
-      window.localStorage.removeItem(STORAGE_KEY);
-    }
-    setToken('');
-    setDraftToken('');
+  // A 401 means the Cloudflare Access session lapsed (or Access is not yet
+  // configured). There is no in-app login to fall back to — a full page reload
+  // re-triggers Google SSO at the edge — so surface a banner and clear data
+  // instead of silently retrying. Also wipes the asks cache so a later refetch
+  // does not show the previous session's data.
+  const onUnauthorized = useCallback(() => {
+    setError(
+      '未授权 (401): 会话可能已过期。请刷新页面重新通过 Google 登录; 若持续出现请检查 Cloudflare Access 配置。',
+    );
     setProjects(null);
     setEdit(null);
     setDel(null);
@@ -149,22 +144,20 @@ export default function Dashboard() {
 
   // silent=true: background auto-refresh path. Skip the loading/error UI so a
   // 5s tick does not flash spinners or red banners on transient hiccups, but
-  // still react to 401 (stale token must kick the user back to login).
+  // still react to 401 (a lapsed Access session must surface).
   const load = useCallback(
-    async (t: string, silent = false) => {
+    async (silent = false) => {
       if (!silent) {
         setLoading(true);
         setError(null);
       }
       try {
-        const data = await api.listProjects(t);
+        const data = await api.listProjects();
         setProjects(data);
-        window.localStorage.setItem(STORAGE_KEY, t);
       } catch (e) {
         const err = e as ApiError;
         if (err.status === 401) {
-          setLoginError('密码错误');
-          fallbackToLogin();
+          onUnauthorized();
         } else if (silent) {
           console.warn('[auto-refresh]', err);
         } else {
@@ -174,24 +167,24 @@ export default function Dashboard() {
         if (!silent) setLoading(false);
       }
     },
-    [fallbackToLogin],
+    [onUnauthorized],
   );
 
   useEffect(() => {
-    if (token) void load(token);
-  }, [token, load]);
+    if (hydrated) void load();
+  }, [hydrated, load]);
 
   // Silent fetch; routes share the projects-list 5s tick.
   const loadAsks = useCallback(
-    async (t: string, project: string) => {
+    async (project: string) => {
       try {
-        const data = await api.listAsks(t, project, ASK_LIMIT_MAX);
+        const data = await api.listAsks(project, ASK_LIMIT_MAX);
         setAsks(data);
         setAsksProject(project);
       } catch (e) {
         const err = e as ApiError;
         if (err.status === 401) {
-          fallbackToLogin();
+          onUnauthorized();
         } else if (err.status === 404) {
           setAsks([]);
           setAsksProject(project);
@@ -200,12 +193,12 @@ export default function Dashboard() {
         }
       }
     },
-    [fallbackToLogin],
+    [onUnauthorized],
   );
 
   // asksProject gate prevents refetch when bouncing project ↔ spec routes.
   useEffect(() => {
-    if (!token) return;
+    if (!hydrated) return;
     if (route.kind === 'home') {
       setAsks(null);
       setAsksProject(null);
@@ -214,22 +207,22 @@ export default function Dashboard() {
     const project = route.project;
     if (asksProject !== project) {
       setAsks(null);
-      void loadAsks(token, project);
+      void loadAsks(project);
     }
-  }, [token, route, asksProject, loadAsks]);
+  }, [hydrated, route, asksProject, loadAsks]);
 
-  // Auto-refresh every 5s while logged in so AI-side CLI changes show up
-  // without a manual reload. Skips ticks when the tab is hidden, then fires
-  // immediately on visibilitychange→visible so a returning user sees fresh
-  // data without waiting for the next interval.
+  // Auto-refresh every 5s so AI-side CLI changes show up without a manual
+  // reload. Skips ticks when the tab is hidden, then fires immediately on
+  // visibilitychange→visible so a returning user sees fresh data without
+  // waiting for the next interval.
   useEffect(() => {
-    if (!token) return;
+    if (!hydrated) return;
     if (typeof document === 'undefined') return;
     const tick = () => {
       if (document.visibilityState !== 'visible') return;
-      void load(token, true);
+      void load(true);
       if (route.kind !== 'home') {
-        void loadAsks(token, route.project);
+        void loadAsks(route.project);
       }
     };
     const intervalId = window.setInterval(tick, 5000);
@@ -238,17 +231,7 @@ export default function Dashboard() {
       window.clearInterval(intervalId);
       document.removeEventListener('visibilitychange', tick);
     };
-  }, [token, load, route, loadAsks]);
-
-  function login() {
-    setLoginError(null);
-    const t = draftToken.trim();
-    if (!t) {
-      setLoginError('请输入密码');
-      return;
-    }
-    setToken(t);
-  }
+  }, [hydrated, load, route, loadAsks]);
 
   // 当前路由对应的 project / spec 对象;若数据中已不存在,后面的渲染逻辑回退上一级
   const activeProject = useMemo(() => {
@@ -284,7 +267,7 @@ export default function Dashboard() {
         if (draft.title !== undefined) patch.title = draft.title;
         if (draft.body !== undefined) patch.body = draft.body;
         if (draft.status !== undefined) patch.status = draft.status as SpecStatus;
-        const updated = await api.patchSpec(token, edit.spec.id, patch);
+        const updated = await api.patchSpec(edit.spec.id, patch);
         setProjects((prev) =>
           prev === null
             ? prev
@@ -300,7 +283,7 @@ export default function Dashboard() {
         if (draft.title !== undefined) patch.title = draft.title;
         if (draft.body !== undefined) patch.body = draft.body;
         if (draft.status !== undefined) patch.status = draft.status as TaskStatus;
-        const updated = await api.patchTask(token, edit.task.id, patch);
+        const updated = await api.patchTask(edit.task.id, patch);
         setProjects((prev) =>
           prev === null
             ? prev
@@ -319,7 +302,7 @@ export default function Dashboard() {
     } catch (e) {
       const err = e as ApiError;
       if (err.status === 401) {
-        fallbackToLogin();
+        onUnauthorized();
       } else {
         setEditError(err.message);
       }
@@ -333,7 +316,7 @@ export default function Dashboard() {
     setBusy(true);
     setEditError(null);
     try {
-      const updated = await api.patchAsk(token, edit.ask.id, { body: newBody });
+      const updated = await api.patchAsk(edit.ask.id, { body: newBody });
       setAsks((prev) =>
         prev === null ? prev : prev.map((a) => (a.id === updated.id ? updated : a)),
       );
@@ -341,7 +324,7 @@ export default function Dashboard() {
     } catch (e) {
       const err = e as ApiError;
       if (err.status === 401) {
-        fallbackToLogin();
+        onUnauthorized();
       } else {
         setEditError(err.message);
       }
@@ -356,11 +339,11 @@ export default function Dashboard() {
     setBusy(true);
     setRenameError(null);
     try {
-      await api.renameProject(token, oldName, newName);
+      await api.renameProject(oldName, newName);
       // Local state is unreliable after a merge (two projects fold into one);
       // drop the cached projects list and force a refetch instead of trying
       // to splice the result in-place.
-      await load(token, true);
+      await load(true);
       if (route.kind !== 'home' && route.project === oldName) {
         if (route.kind === 'project') {
           navigate({ kind: 'project', project: newName });
@@ -372,7 +355,7 @@ export default function Dashboard() {
     } catch (e) {
       const err = e as ApiError;
       if (err.status === 401) {
-        fallbackToLogin();
+        onUnauthorized();
       } else {
         setRenameError(err.message);
       }
@@ -388,13 +371,13 @@ export default function Dashboard() {
     try {
       if (del.kind === 'project') {
         const name = del.name;
-        await api.deleteProject(token, name);
+        await api.deleteProject(name);
         setProjects((prev) =>
           prev === null ? prev : prev.filter((p) => p.name !== name),
         );
       } else if (del.kind === 'spec') {
         const id = del.id;
-        await api.deleteSpec(token, id);
+        await api.deleteSpec(id);
         setProjects((prev) =>
           prev === null
             ? prev
@@ -405,7 +388,7 @@ export default function Dashboard() {
         );
       } else if (del.kind === 'task') {
         const id = del.id;
-        await api.deleteTask(token, id);
+        await api.deleteTask(id);
         setProjects((prev) =>
           prev === null
             ? prev
@@ -419,14 +402,14 @@ export default function Dashboard() {
         );
       } else {
         const id = del.id;
-        await api.deleteAsk(token, id);
+        await api.deleteAsk(id);
         setAsks((prev) => (prev === null ? prev : prev.filter((a) => a.id !== id)));
       }
       setDel(null);
     } catch (e) {
       const err = e as ApiError;
       if (err.status === 401) {
-        fallbackToLogin();
+        onUnauthorized();
       } else {
         setError(err.message);
         setDel(null);
@@ -437,51 +420,6 @@ export default function Dashboard() {
   }
 
   if (!hydrated) return null;
-
-  if (!token) {
-    return (
-      <div className="min-h-screen flex items-center justify-center px-4">
-        <div className="w-full max-w-sm">
-          <div className="text-center mb-8">
-            <h1 className="text-5xl font-black tracking-tight text-zinc-50">JJ</h1>
-            <p className="mt-3 text-sm text-zinc-500">
-              console · 输入密码以继续
-            </p>
-          </div>
-          <div className="space-y-3">
-            <input
-              type="password"
-              autoComplete="off"
-              spellCheck={false}
-              value={draftToken}
-              onChange={(e) => setDraftToken(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') login();
-              }}
-              placeholder="password"
-              className="w-full px-3 py-2 rounded-md bg-zinc-900 border border-zinc-800 focus:border-blue-500 focus:outline-none font-mono text-sm"
-            />
-            <button
-              onClick={login}
-              className="w-full py-2 rounded-md bg-blue-500 text-zinc-950 font-medium hover:bg-blue-400 transition"
-            >
-              continue
-            </button>
-            {loginError && (
-              <div className="text-sm text-red-400 text-center">
-                {loginError}
-              </div>
-            )}
-          </div>
-          <p className="mt-8 text-xs text-zinc-400 text-center leading-relaxed">
-            创建 plan / task / ask 请使用 jjplan / jjask CLI;
-            <br />
-            此处仅查看与编辑。
-          </p>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen">
@@ -514,9 +452,8 @@ export default function Dashboard() {
           </div>
         ) : route.kind === 'home' ? (
           <AskSearch
-            token={token}
             onOpenProject={(name) => navigate({ kind: 'project', project: name })}
-            onUnauthorized={fallbackToLogin}
+            onUnauthorized={onUnauthorized}
             fallback={
               <ProjectsList
                 projects={projects}

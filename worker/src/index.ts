@@ -1,12 +1,19 @@
-import { Hono, type Context } from 'hono';
-import { bearerAuth } from 'hono/bearer-auth';
+import { Hono, type Context, type MiddlewareHandler } from 'hono';
+import { getCookie } from 'hono/cookie';
 import { HTTPException } from 'hono/http-exception';
+import { createRemoteJWKSet, jwtVerify, type JWTVerifyGetKey } from 'jose';
 
 import { ulid } from './ulid';
 
 type Bindings = {
   DB: D1Database;
   JJPLAN_TOKEN: string;
+  // Optional Cloudflare Access (Google SSO) for the browser dashboard. When
+  // BOTH are set, protected routes ALSO accept a valid Access JWT; when unset,
+  // auth stays bearer-only (CLI). This decouples the deploy from the Cloudflare
+  // Access setup and keeps the CLI contract unchanged either way.
+  CF_ACCESS_TEAM_DOMAIN?: string; // https://<team>.cloudflareaccess.com
+  CF_ACCESS_AUD?: string; // Access application AUD tag
 };
 
 const SPEC_STATUSES = ['active', 'done'] as const;
@@ -70,12 +77,60 @@ const ASK_SEARCH_MAX_TERMS = 16;
 
 const app = new Hono<{ Bindings: Bindings }>();
 
-// ---------- middleware ----------
+// ---------- auth ----------
 
-app.use('/projects/*', (c, next) => bearerAuth({ token: c.env.JJPLAN_TOKEN })(c, next));
-app.use('/specs/*', (c, next) => bearerAuth({ token: c.env.JJPLAN_TOKEN })(c, next));
-app.use('/tasks/*', (c, next) => bearerAuth({ token: c.env.JJPLAN_TOKEN })(c, next));
-app.use('/asks/*', (c, next) => bearerAuth({ token: c.env.JJPLAN_TOKEN })(c, next));
+// Dual-credential auth on every protected route:
+//   1. Bearer token == JJPLAN_TOKEN — the CLI (jjplan / jjask). Stable contract.
+//   2. Cloudflare Access JWT — the browser dashboard, once the human clears
+//      Google SSO at the edge. Only checked when CF_ACCESS_* env is present.
+//
+// The Access JWT arrives either as the Cf-Access-Jwt-Assertion header (on paths
+// Access enforces) or, on a bypassed API path, as the CF_Authorization cookie
+// the browser sends same-origin. We accept either and verify against the team's
+// rotating JWKS with issuer + audience (AUD) pinned, so a token minted for any
+// other Access app in the same team is rejected.
+//
+// Bearer is checked first and cheaply (string compare), so the CLI never
+// triggers a JWKS fetch. Any missing/incorrect credential is a 401 — matching
+// the previous bearerAuth behaviour the test suite pins.
+
+// Isolate-scoped JWKS, keyed by team domain. createRemoteJWKSet caches keys and
+// refetches on rotation (unknown kid), so one instance serves all requests.
+let jwksCache: { domain: string; jwks: JWTVerifyGetKey } | null = null;
+function accessJwks(teamDomain: string): JWTVerifyGetKey {
+  if (jwksCache?.domain === teamDomain) return jwksCache.jwks;
+  const jwks = createRemoteJWKSet(new URL(`${teamDomain}/cdn-cgi/access/certs`));
+  jwksCache = { domain: teamDomain, jwks };
+  return jwks;
+}
+
+const authMiddleware: MiddlewareHandler<{ Bindings: Bindings }> = async (c, next) => {
+  const expected = c.env.JJPLAN_TOKEN;
+  if (expected && c.req.header('Authorization') === `Bearer ${expected}`) {
+    return next();
+  }
+
+  const teamDomain = c.env.CF_ACCESS_TEAM_DOMAIN;
+  const aud = c.env.CF_ACCESS_AUD;
+  if (teamDomain && aud) {
+    const jwt = c.req.header('Cf-Access-Jwt-Assertion') ?? getCookie(c, 'CF_Authorization');
+    if (jwt) {
+      try {
+        await jwtVerify(jwt, accessJwks(teamDomain), { issuer: teamDomain, audience: aud });
+        return next();
+      } catch {
+        // invalid / expired Access JWT — fall through to 401
+      }
+    }
+  }
+
+  throw new HTTPException(401, { message: 'unauthorized' });
+};
+
+app.use('/projects/*', authMiddleware);
+app.use('/specs/*', authMiddleware);
+app.use('/tasks/*', authMiddleware);
+app.use('/asks/*', authMiddleware);
 
 app.onError((err, c) => {
   if (err instanceof HTTPException) {

@@ -13,6 +13,16 @@
 
 > 历史 27 版 (≤ 0.8.23) 在双文件分界确立前写成, 含文件/函数级细节, 原文照搬未回填; 用户向精简严格自 **0.8.24** 起执行.
 
+## [0.10.0] - 2026-07-17
+
+### Changed
+
+- Web 面板登录改用 Cloudflare Access (Google) 单点登录, 取代原固定密码框; 需在 Cloudflare 侧配置 Access 后生效. CLI (jjplan / jjask) 认证方式不变.
+
+### Security
+
+- 浏览器不再持有 API token: 面板身份由 Cloudflare Access (Google) 会话校验, token 仅保留在 CLI 侧.
+
 ## [0.9.0] - 2026-07-16
 
 ### Added

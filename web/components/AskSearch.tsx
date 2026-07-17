@@ -14,7 +14,6 @@ import { ASK_SEARCH_LIMIT_MAX, type Ask } from '@/lib/types';
 import { PROJECT_TAB_STORAGE_KEY } from './ProjectTabs';
 
 interface Props {
-  token: string;
   onOpenProject: (name: string) => void;
   onUnauthorized: () => void;
   // Shown when the query is empty — the normal home content (projects list).
@@ -25,7 +24,6 @@ interface Props {
 // against GET /asks; an empty query falls back to the projects list so the box
 // is purely additive. Results render inline with the matched terms highlighted.
 export default function AskSearch({
-  token,
   onOpenProject,
   onUnauthorized,
   fallback,
@@ -62,7 +60,7 @@ export default function AskSearch({
     setError(null);
     const handle = window.setTimeout(() => {
       api
-        .searchAsks(token, trimmed, ASK_SEARCH_LIMIT_MAX)
+        .searchAsks(trimmed, ASK_SEARCH_LIMIT_MAX)
         .then((data) => {
           if (rid !== reqIdRef.current) return;
           setResults(data);
@@ -80,7 +78,7 @@ export default function AskSearch({
         });
     }, 250);
     return () => window.clearTimeout(handle);
-  }, [trimmed, composing, token, onUnauthorized]);
+  }, [trimmed, composing, onUnauthorized]);
 
   function openProject(name: string) {
     // The match lives under the project's ASKS tab; preselect it so the click

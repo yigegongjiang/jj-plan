@@ -9,6 +9,20 @@
 
 > 历史 27 版 (≤ 0.8.23) 在双文件分界确立前写成, 原文照搬未回填; 用户向 / 开发向严格分界自 **0.8.24** 起执行.
 
+## [0.10.0] - 2026-07-17
+
+### Changed
+
+- Web 面板登录改用 Cloudflare Access (Google) 单点登录, 取代原固定密码框; 需在 Cloudflare 侧配置 Access 后生效. CLI (jjplan / jjask) 认证方式不变.
+  - Worker: 新 `authMiddleware` 替换 4 处 `bearerAuth` — 先比对 `Bearer == JJPLAN_TOKEN` (CLI); 未命中且 `CF_ACCESS_TEAM_DOMAIN`+`CF_ACCESS_AUD` 齐备时, 用 `jose` (`createRemoteJWKSet`+`jwtVerify`, 校验 `iss`/`aud`) 验 `Cf-Access-Jwt-Assertion` header 或 `CF_Authorization` cookie; 否则 401. Access env 缺省 = bearer-only, CLI 契约与全部 worker 测试不变. 加 `jose` 依赖; JWKS 按 team domain isolate 级缓存.
+  - Web: `api.ts` 删 token 参数 + 不再发 `Authorization` (依赖同源 `CF_Authorization` cookie); `Dashboard.tsx` 删密码登录界面 / `STORAGE_KEY` / token+draftToken+loginError state / `login()`, 挂载即 `load()`, 401→顶部横幅提示刷新重登 (原 `fallbackToLogin`→`onUnauthorized`); `AskSearch.tsx` 去 `token` prop.
+  - `wrangler.toml`: 注释说明 `CF_ACCESS_TEAM_DOMAIN` / `CF_ACCESS_AUD` 为可选 vars (非 secret), 未设即 bearer-only.
+
+### Security
+
+- 浏览器不再持有 API token: 面板身份由 Cloudflare Access (Google) 会话校验, token 仅保留在 CLI 侧.
+  - `aud` 绑定该 Access app 的 AUD tag → 同 team 其他 app 签发的 JWT 被拒; `iss` 绑定 team domain; JWKS 6 周轮换由 `createRemoteJWKSet` 按 `kid` 自动刷新.
+
 ## [0.9.0] - 2026-07-16
 
 ### Added
