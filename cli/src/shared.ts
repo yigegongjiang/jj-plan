@@ -26,9 +26,18 @@ export const MAX_PROJECT_NAME_LEN = 128;
 export const ASK_LIMIT_DEFAULT = 3;
 export const ASK_LIMIT_MAX = 100;
 
+// Two auth modes, either or both may be present:
+//   - token: bearer, checked by the worker against JJPLAN_TOKEN (original mode).
+//   - cf_access_client_id + cf_access_client_secret: a Cloudflare Access service
+//     token. When the endpoint is an Access-protected host, the edge validates
+//     the pair (Service Auth policy) and injects an Access JWT the worker trusts.
+// Point `endpoint` at the Access-protected host to use the service token; a
+// bare workers.dev host (no Access) only honours the bearer `token`.
 export interface Config {
   endpoint: string;
-  token: string;
+  token?: string;
+  cf_access_client_id?: string;
+  cf_access_client_secret?: string;
 }
 
 export function resolveVersion(): string {
@@ -71,10 +80,27 @@ function loadConfig(entry: string): Config {
     die(entry, `invalid JSON in ${CONFIG_PATH}: ${(e as Error).message}`);
   }
   const cfg = parsed as Partial<Config>;
-  if (typeof cfg.endpoint !== 'string' || typeof cfg.token !== 'string') {
-    die(entry, `${CONFIG_PATH} must contain {"endpoint":"...","token":"..."}`);
+  if (typeof cfg.endpoint !== 'string' || cfg.endpoint.length === 0) {
+    die(entry, `${CONFIG_PATH} must contain "endpoint"`);
   }
-  return { endpoint: cfg.endpoint, token: cfg.token };
+  const hasToken = typeof cfg.token === 'string' && cfg.token.length > 0;
+  const hasServiceToken =
+    typeof cfg.cf_access_client_id === 'string' &&
+    cfg.cf_access_client_id.length > 0 &&
+    typeof cfg.cf_access_client_secret === 'string' &&
+    cfg.cf_access_client_secret.length > 0;
+  if (!hasToken && !hasServiceToken) {
+    die(
+      entry,
+      `${CONFIG_PATH} must contain "token" or ("cf_access_client_id" + "cf_access_client_secret")`,
+    );
+  }
+  return {
+    endpoint: cfg.endpoint,
+    token: hasToken ? cfg.token : undefined,
+    cf_access_client_id: hasServiceToken ? cfg.cf_access_client_id : undefined,
+    cf_access_client_secret: hasServiceToken ? cfg.cf_access_client_secret : undefined,
+  };
 }
 
 export async function api(
@@ -86,9 +112,14 @@ export async function api(
   const cfg = loadConfig(entry);
   const url = cfg.endpoint.replace(/\/+$/, '') + path;
 
-  const headers: Record<string, string> = {
-    Authorization: `Bearer ${cfg.token}`,
-  };
+  const headers: Record<string, string> = {};
+  if (cfg.token) {
+    headers['Authorization'] = `Bearer ${cfg.token}`;
+  }
+  if (cfg.cf_access_client_id && cfg.cf_access_client_secret) {
+    headers['CF-Access-Client-Id'] = cfg.cf_access_client_id;
+    headers['CF-Access-Client-Secret'] = cfg.cf_access_client_secret;
+  }
   const init: RequestInit = { method, headers };
   if (body !== undefined) {
     headers['content-type'] = 'application/json';

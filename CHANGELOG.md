@@ -13,6 +13,12 @@
 
 > 历史 27 版 (≤ 0.8.23) 在双文件分界确立前写成, 含文件/函数级细节, 原文照搬未回填; 用户向精简严格自 **0.8.24** 起执行.
 
+## [0.11.0] - 2026-07-17
+
+### Added
+
+- CLI 支持 Cloudflare Access Service Token 认证: config 填 `cf_access_client_id` + `cf_access_client_secret`, endpoint 指向受 Access 保护的域即可, 凭证由 Cloudflare 签发/可吊销, 与网页 Google 登录统一。原 `token` 方式仍兼容, 现有配置不受影响。
+
 ## [0.10.1] - 2026-07-17
 
 ### Changed

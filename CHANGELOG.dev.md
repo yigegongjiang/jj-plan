@@ -9,6 +9,15 @@
 
 > 历史 27 版 (≤ 0.8.23) 在双文件分界确立前写成, 原文照搬未回填; 用户向 / 开发向严格分界自 **0.8.24** 起执行.
 
+## [0.11.0] - 2026-07-17
+
+### Added
+
+- CLI 支持 Cloudflare Access Service Token 认证: config 填 `cf_access_client_id` + `cf_access_client_secret`, endpoint 指向受 Access 保护的域即可, 凭证由 Cloudflare 签发/可吊销, 与网页 Google 登录统一。原 `token` 方式仍兼容, 现有配置不受影响。
+  - `cli/src/shared.ts`: `Config` 加可选 `cf_access_client_id`/`cf_access_client_secret`, `token` 变可选; `loadConfig` 校验 `endpoint` + (`token` 或 service token 对), 二者缺一即报错; `api()` 按存在与否发 `Authorization: Bearer` 与/或 `CF-Access-Client-Id`/`CF-Access-Client-Secret` 头。
+  - Worker 零改动: service token 经 Access edge 校验 (Service Auth policy) 后注入 `Cf-Access-Jwt-Assertion`, 由 0.10.0 的 `authMiddleware` 按 iss/aud 校验。
+  - 用法: endpoint 指向已受 Access 保护的 `jjplan.yigegongjiang.com`; 在同一 app 加 Service Auth policy (与 Allow Google 共存, Service Auth 优先评估)。headless/AI agent 场景 Cloudflare 官方推荐 service token, 非浏览器登录。
+
 ## [0.10.1] - 2026-07-17
 
 ### Changed
