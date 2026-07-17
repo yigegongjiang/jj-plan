@@ -9,6 +9,14 @@
 
 > 历史 27 版 (≤ 0.8.23) 在双文件分界确立前写成, 原文照搬未回填; 用户向 / 开发向严格分界自 **0.8.24** 起执行.
 
+## [0.11.1] - 2026-07-17
+
+### Changed
+
+- README 补充认证说明 (Cloudflare Access / Google 登录 / service token), 与 0.10.x–0.11.0 的认证改动对齐; 无运行时变化.
+  - `README.md`: 价值主张 `endpoint/token`→`endpoint + 凭证`; 使用段列出 config 两种凭证 (bearer `token` / service token `cf_access_client_id`+`cf_access_client_secret`) + dashboard 经 Cloudflare Access (Google) 登录; 架构新增「认证」项 (dashboard Google SSO / CLI bearer|service token / Worker 双认证 / endpoint workers.dev|自定义域)。
+  - 全仓库核对: `AGENTS.md` / `workflow.md` / `install.sh` / CLI `--help` 均无 auth 文案, 无需改。
+
 ## [0.11.0] - 2026-07-17
 
 ### Added
