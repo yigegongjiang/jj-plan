@@ -9,6 +9,14 @@
 
 > 历史 27 版 (≤ 0.8.23) 在双文件分界确立前写成, 原文照搬未回填; 用户向 / 开发向严格分界自 **0.8.24** 起执行.
 
+## [0.10.1] - 2026-07-17
+
+### Changed
+
+- 接入 Cloudflare Access 校验参数 (team domain + AUD), 网页 Google 登录链路打通 (需 Cloudflare 侧 Access 已对自定义域生效).
+  - `wrangler.toml` `[vars]`: `CF_ACCESS_TEAM_DOMAIN = https://yigegongjiang.cloudflareaccess.com`, `CF_ACCESS_AUD = e255…c6b` (非机密, 走 CI `wrangler deploy`; 本机 wrangler 非交互无 API token 故不本地 secret put).
+  - 无代码改动; 仅打开 0.10.0 已埋好的 Access 校验分支 (`authMiddleware` 见 iss/aud 齐备即验 JWT).
+
 ## [0.10.0] - 2026-07-17
 
 ### Changed

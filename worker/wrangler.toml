@@ -9,15 +9,15 @@ compatibility_date = "2026-05-01"
 [assets]
 directory = "../web/out"
 
-# Cloudflare Access (Google SSO) for the browser dashboard — OPTIONAL.
-# Uncomment + fill after configuring Access. When BOTH are set, protected
-# routes also accept a valid Access JWT (browser); unset = bearer-only (CLI).
-# Neither value is secret (they are identifiers), so plain [vars] is fine.
-#   CF_ACCESS_TEAM_DOMAIN = "https://<team>.cloudflareaccess.com"
-#   CF_ACCESS_AUD         = "<dashboard app Application Audience (AUD) tag>"
-# [vars]
-# CF_ACCESS_TEAM_DOMAIN = ""
-# CF_ACCESS_AUD = ""
+# Cloudflare Access (Google SSO) for the browser dashboard. When BOTH are set,
+# protected routes also accept a valid Access JWT (browser); unset = bearer-only.
+# Neither value is a secret (team domain is public, AUD is an app-audience
+# identifier — a request still needs a Cloudflare-signed JWT for this AUD, which
+# requires passing the Access policy), so plain committed [vars] is the standard
+# pattern (mirrors Cloudflare's own Workers+Access examples).
+[vars]
+CF_ACCESS_TEAM_DOMAIN = "https://yigegongjiang.cloudflareaccess.com"
+CF_ACCESS_AUD = "e255d29d523b8a7785d15a9556b1e50b3497c691b45887ac0aad2bd27e4e4c6b"
 
 # database_id is filled in during one-time bootstrap:
 #   wrangler d1 create jjplan
