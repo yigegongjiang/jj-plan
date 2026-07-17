@@ -16,7 +16,7 @@ AI 专用 Spec/Task/Ask 追踪系统 (macOS only, x64 + arm64). 数据存 Cloudf
 curl -fsSL https://raw.githubusercontent.com/yigegongjiang/jj-plan/main/install.sh | bash
 ```
 
-一键安装 `jjplan` + `jjask` 到 `$HOME/.local/bin/`. 配置 `~/.jjplan/config.json`: `endpoint` + 凭证 (bearer `token`, 或 Cloudflare Access service token `cf_access_client_id` + `cf_access_client_secret`). `jjplan --help` / `jjask --help` 查看命令; dashboard 经 Cloudflare Access (Google) 登录.
+一键安装 `jjplan` + `jjask` 到 `$HOME/.local/bin/`. 配置 `~/.config/jjplan/config.json` (遵循 XDG, 尊重 `$XDG_CONFIG_HOME`; 旧路径 `~/.jjplan/config.json` 仍作 fallback): `endpoint` + 凭证 (bearer `token`, 或 Cloudflare Access service token `cf_access_client_id` + `cf_access_client_secret`). `jjplan --help` / `jjask --help` 查看命令; dashboard 经 Cloudflare Access (Google) 登录.
 
 ## 架构
 

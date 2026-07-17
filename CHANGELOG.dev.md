@@ -9,6 +9,14 @@
 
 > 历史 27 版 (≤ 0.8.23) 在双文件分界确立前写成, 原文照搬未回填; 用户向 / 开发向严格分界自 **0.8.24** 起执行.
 
+## [0.12.0] - 2026-07-17
+
+### Changed
+
+- CLI 配置文件迁移到 XDG 标准位置 `~/.config/jjplan/config.json` (尊重 `$XDG_CONFIG_HOME`); 旧路径 `~/.jjplan/config.json` 仍作 fallback, 现有配置无需改动。
+  - `cli/src/shared.ts`: `CONFIG_PATH` = `${XDG_CONFIG_HOME:-~/.config}/jjplan/config.json`; 新增 `LEGACY_CONFIG_PATH` (`~/.jjplan`) + `resolveConfigPath()` (canonical 存在则用, 否则 legacy, 皆无则回退 canonical 供报错); `loadConfig` 全程用解析出的 path。
+  - `README.md` 使用段 + `install.sh` uninstall 提示同步为 canonical 路径 (标注 legacy fallback)。
+
 ## [0.11.1] - 2026-07-17
 
 ### Changed

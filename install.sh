@@ -110,7 +110,7 @@ esac
 
 if [ "$ACTION" = "uninstall" ]; then
   for n in "${BINARIES[@]}"; do uninstall_one "$n"; done
-  info "config kept: ${HOME}/.jjplan/config.json"
+  info "config kept: ${XDG_CONFIG_HOME:-${HOME}/.config}/jjplan/config.json (legacy ${HOME}/.jjplan/config.json still honoured)"
   exit 0
 fi
 

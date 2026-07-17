@@ -1,7 +1,7 @@
 // Shared helpers for jjplan + jjask binaries.
 // Flat module, no submodules. Each binary entry imports what it needs.
 import { parseArgs } from 'node:util';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, join } from 'node:path';
 import { execSync } from 'node:child_process';
@@ -11,7 +11,25 @@ import { execSync } from 'node:child_process';
 declare const JJ_VERSION: string | undefined;
 declare const JJ_REPO: string | undefined;
 
-export const CONFIG_PATH = join(homedir(), '.jjplan', 'config.json');
+// Config lives at $XDG_CONFIG_HOME/jjplan/config.json (XDG Base Directory,
+// default ~/.config/jjplan/config.json). The legacy ~/.jjplan/config.json is
+// still honoured as a fallback so pre-0.12 installs keep working without a move.
+const XDG_CONFIG_HOME = process.env.XDG_CONFIG_HOME;
+const CONFIG_HOME =
+  XDG_CONFIG_HOME && XDG_CONFIG_HOME.length > 0
+    ? XDG_CONFIG_HOME
+    : join(homedir(), '.config');
+export const CONFIG_PATH = join(CONFIG_HOME, 'jjplan', 'config.json');
+const LEGACY_CONFIG_PATH = join(homedir(), '.jjplan', 'config.json');
+
+// Canonical path wins; legacy is read only when canonical is absent. Returns
+// the canonical path when neither exists so error messages point users at the
+// path they should create.
+function resolveConfigPath(): string {
+  if (existsSync(CONFIG_PATH)) return CONFIG_PATH;
+  if (existsSync(LEGACY_CONFIG_PATH)) return LEGACY_CONFIG_PATH;
+  return CONFIG_PATH;
+}
 
 const REPO =
   typeof JJ_REPO === 'string' && JJ_REPO.length > 0 ? JJ_REPO : 'yigegongjiang/jj-plan';
@@ -67,21 +85,22 @@ export function dieUsage(entry: string, usage: string, reason: string): never {
 // ─── config + HTTP ────────────────────────────────────────────────────────
 
 function loadConfig(entry: string): Config {
+  const path = resolveConfigPath();
   let raw: string;
   try {
-    raw = readFileSync(CONFIG_PATH, 'utf8');
+    raw = readFileSync(path, 'utf8');
   } catch (e) {
-    die(entry, `unable to read ${CONFIG_PATH}: ${(e as Error).message}`);
+    die(entry, `unable to read ${path}: ${(e as Error).message}`);
   }
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
   } catch (e) {
-    die(entry, `invalid JSON in ${CONFIG_PATH}: ${(e as Error).message}`);
+    die(entry, `invalid JSON in ${path}: ${(e as Error).message}`);
   }
   const cfg = parsed as Partial<Config>;
   if (typeof cfg.endpoint !== 'string' || cfg.endpoint.length === 0) {
-    die(entry, `${CONFIG_PATH} must contain "endpoint"`);
+    die(entry, `${path} must contain "endpoint"`);
   }
   const hasToken = typeof cfg.token === 'string' && cfg.token.length > 0;
   const hasServiceToken =
@@ -92,7 +111,7 @@ function loadConfig(entry: string): Config {
   if (!hasToken && !hasServiceToken) {
     die(
       entry,
-      `${CONFIG_PATH} must contain "token" or ("cf_access_client_id" + "cf_access_client_secret")`,
+      `${path} must contain "token" or ("cf_access_client_id" + "cf_access_client_secret")`,
     );
   }
   return {
