@@ -1,0 +1,20 @@
+[package]
+name = "jj-plan-cli"
+version = "0.0.0"                 # unused; real version injected via build.rs -> JJ_VERSION
+edition = "2021"
+repository = "https://github.com/yigegongjiang/jj-plan"
+publish = false
+
+# Two binaries (jj-plan + jj-ask) + one shared lib are auto-discovered from
+# src/bin/*.rs and src/lib.rs — no explicit [[bin]]/[lib] tables needed.
+
+[dependencies]
+ureq = "2"                                                # blocking HTTP client (rustls TLS)
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order"] }  # keep JSON key order == JS JSON.stringify
+
+[profile.release]
+strip = true
+lto = true
+codegen-units = 1
+panic = "abort"

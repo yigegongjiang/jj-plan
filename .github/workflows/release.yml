@@ -59,13 +59,13 @@ jobs:
           command: deploy
 
   build-cli:
-    runs-on: ubuntu-latest
+    # macOS runner cross-compiles both apple-darwin arches from one host (Apple
+    # ships both SDKs), so a single job produces arm64 + x64 binaries.
+    runs-on: macos-latest
     permissions:
       contents: write  # required by softprops/action-gh-release
     steps:
       - uses: actions/checkout@v4
-
-      - uses: oven-sh/setup-bun@v2
 
       - name: Verify VERSION matches tag
         run: |
@@ -76,17 +76,26 @@ jobs:
             exit 1
           fi
 
-      - name: Install cli deps
-        working-directory: cli
-        run: bun install --frozen-lockfile || bun install
+      - name: Add Rust targets
+        run: rustup target add aarch64-apple-darwin x86_64-apple-darwin
 
-      - name: Typecheck CLI
+      - name: Compile macOS binaries (jj-plan + jj-ask × arm64 + x64)
         working-directory: cli
-        run: bun run typecheck
+        run: cargo build --release --target aarch64-apple-darwin --target x86_64-apple-darwin
 
-      - name: Compile macOS binaries (jj-plan + jj-ask × x64 + arm64)
+      # Map cargo target triples to the asset names install.sh expects
+      # (jj-{plan,ask}-macos-{arm64,x64}).
+      - name: Assemble release assets
         working-directory: cli
-        run: bun run build
+        run: |
+          mkdir -p dist
+          for pair in "aarch64-apple-darwin:arm64" "x86_64-apple-darwin:x64"; do
+            triple="${pair%%:*}"; arch="${pair##*:}"
+            for bin in jj-plan jj-ask; do
+              cp "target/$triple/release/$bin" "dist/$bin-macos-$arch"
+            done
+          done
+          ls -la dist
 
       - name: Generate SHA256 checksums
         working-directory: cli/dist
@@ -94,7 +103,7 @@ jobs:
           shopt -s nullglob
           files=( jj-plan-macos-* jj-ask-macos-* )
           [ ${#files[@]} -gt 0 ] || { echo "no build artifacts found in cli/dist" >&2; exit 1; }
-          sha256sum "${files[@]}" > checksums.txt
+          shasum -a 256 "${files[@]}" > checksums.txt
           cat checksums.txt
 
       - name: Attach binaries to release

@@ -9,6 +9,27 @@
 
 > 历史 27 版 (≤ 0.8.23) 在双文件分界确立前写成, 原文照搬未回填; 用户向 / 开发向严格分界自 **0.8.24** 起执行.
 
+## [0.15.0] - 2026-07-23
+
+### Changed
+
+- CLI 由 Bun/TypeScript 迁移为 Rust 原生实现; 命令 / 参数 / stdin / 输出 / 安装与更新方式完全不变, 调用方无需改动。
+  - `cli/`: 删 `build.ts` / `package.json` / `bun.lock` / `tsconfig.json` / `src/*.ts`; 新增 `Cargo.toml` (ureq + serde_json[preserve_order], release strip+lto+abort) + `build.rs` (读 `../VERSION` 注入 `JJ_VERSION`) + `src/lib.rs` 共享层 + `src/bin/{jj-plan,jj-ask}.rs` 双二进制。
+  - `serde_json` preserve_order + compact 序列化 = 旧 `JSON.stringify(JSON.parse(text))` 逐字节等价; 长度校验用 UTF-16 单位对齐 JS `String.length`; 手写 arg 解析复刻 usage/错误语义 (--help 与解析错误路径对旧 TS 逐字节比对通过, 唯 flag 缺值文案有别)。
+  - `.github/workflows/release.yml` `build-cli`: `ubuntu`+bun → `macos-latest`+`cargo build --release` 双 target (`aarch64`/`x86_64-apple-darwin`); 产物按 install.sh 约定改名 `…-macos-{arm64,x64}`; 校验和 `sha256sum` → `shasum -a 256`。`deploy-worker` 不变。
+  - `workflow.md` / `README.md` CLI 技术栈与调试命令 bun → cargo。
+- 网络安装脚本迁至 `scripts/install.sh` (curl 地址随之变更)。0.14.x 及更早二进制的 `update` 指向旧地址会失败, 需用新地址重装一次。
+  - `git mv install.sh scripts/install.sh`; 同步 `README.md` curl URL、`cli/src/lib.rs` `INSTALL_URL`、脚本头 usage 注释 → `…/main/scripts/install.sh`。
+  - 新增 `scripts/install-local.sh`: `cargo build --release` 本机原生构建 + 装入 `$HOME/.local/bin` (供 dev / 发布后本机自安装); `workflow.md` 发布流程新增「本机自安装」步骤调用它。
+
+### Removed
+
+- 移除 bearer token 认证; CLI 与 Worker 统一走 Cloudflare Access (CLI 用 service token)。仅配了 `token` 的旧配置需改为 service token 键 (该模式本就无法通过生产的 Access 网关)。
+  - `worker/src/index.ts`: 删 `JJPLAN_TOKEN` binding + authMiddleware bearer 分支 → 仅校验 Access JWT (`Cf-Access-Jwt-Assertion` / `CF_Authorization` cookie, issuer+AUD 绑定)。
+  - `cli/src/lib.rs`: `Config` 去 `token`; 仅 `endpoint` + `cf_access_client_id` + `cf_access_client_secret`; api 只发 `CF-Access-Client-Id/Secret` 头。
+  - 删 worker 测试套件 (`worker/test/` + `vitest.config.ts` + `package.json` test 脚本 & `vitest`/`vitest-pool-workers` devDeps); CI 不跑 worker 测试, deploy 不受影响。
+  - `worker/wrangler.toml` / `web/lib/api.ts` 注释同步为「Access 为唯一认证路径」。
+
 ## [0.14.0] - 2026-07-23
 
 ### Changed (BREAKING — CLI 命令改名)

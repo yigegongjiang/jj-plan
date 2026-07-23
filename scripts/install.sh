@@ -3,10 +3,10 @@
 # One action covers both binaries; per-binary mode is not supported.
 #
 # Usage:
-#   curl -fsSL https://raw.githubusercontent.com/yigegongjiang/jj-plan/main/install.sh | bash
-#   curl -fsSL https://raw.githubusercontent.com/yigegongjiang/jj-plan/main/install.sh | VERSION=v0.8.23 bash
-#   INSTALL_DIR=/usr/local/bin ./install.sh
-#   ./install.sh uninstall
+#   curl -fsSL https://raw.githubusercontent.com/yigegongjiang/jj-plan/main/scripts/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/yigegongjiang/jj-plan/main/scripts/install.sh | VERSION=v0.8.23 bash
+#   INSTALL_DIR=/usr/local/bin ./scripts/install.sh
+#   ./scripts/install.sh uninstall
 
 set -euo pipefail
 

@@ -13,22 +13,22 @@ AI 专用 Spec/Task/Ask 追踪系统 (macOS only, x64 + arm64). 数据存 Cloudf
 ## 使用
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/yigegongjiang/jj-plan/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/yigegongjiang/jj-plan/main/scripts/install.sh | bash
 ```
 
-一键安装 `jj-plan` + `jj-ask` 到 `$HOME/.local/bin/`. 配置 `~/.config/jj-plan/config.json` (遵循 XDG, 尊重 `$XDG_CONFIG_HOME`; 旧路径 `~/.config/jjplan` 与 `~/.jjplan` 仍作只读 fallback): `endpoint` + 凭证 (bearer `token`, 或 Cloudflare Access service token `cf_access_client_id` + `cf_access_client_secret`). `jj-plan --help` / `jj-ask --help` 查看命令; dashboard 经 Cloudflare Access (Google) 登录.
+一键安装 `jj-plan` + `jj-ask` 到 `$HOME/.local/bin/`. 配置 `~/.config/jj-plan/config.json` (遵循 XDG, 尊重 `$XDG_CONFIG_HOME`; 旧路径 `~/.config/jjplan` 与 `~/.jjplan` 仍作只读 fallback): `endpoint` + Cloudflare Access service token (`cf_access_client_id` + `cf_access_client_secret`). `jj-plan --help` / `jj-ask --help` 查看命令; dashboard 经 Cloudflare Access (Google) 登录.
 
 ## 架构
 
 - **模型**: project -> spec -> task (ULID id); ask 按 project 扁平存储
-- **技术栈**: Bun CLI (TypeScript) + Cloudflare Worker (D1) + Next.js SPA (静态导出, Worker 托管)
-- **认证**: dashboard 经 Cloudflare Access (Google SSO, 无密码); CLI 用 bearer token 或 Cloudflare Access service token (headless); Worker 对受保护路由双认证 (bearer == `JJPLAN_TOKEN` 或校验 Access JWT), 任一通过即放行; endpoint 指向受 Access 保护的自定义域 (workers.dev 旁路入口已关闭)
+- **技术栈**: Rust CLI + Cloudflare Worker (D1) + Next.js SPA (静态导出, Worker 托管)
+- **认证**: 单一路径 = Cloudflare Access JWT. dashboard 经 Google SSO (无密码); CLI 用 Access service token (headless, 边缘校验后注入 JWT); Worker 对受保护路由校验 Access JWT (issuer + AUD 绑定); endpoint 指向受 Access 保护的自定义域 (workers.dev 旁路入口已关闭)
 
 ## 项目结构
 
 <!-- prettier-ignore -->
 | 目录 | 职责 |
 |---|---|
-| `cli/` | CLI 二进制 (`jj-plan` + `jj-ask`), Bun + TypeScript |
+| `cli/` | CLI 二进制 (`jj-plan` + `jj-ask`), Rust |
 | `worker/` | Cloudflare Worker + D1 migrations |
 | `web/` | Next.js dashboard SPA (静态导出) |

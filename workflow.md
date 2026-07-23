@@ -13,7 +13,7 @@
 # 调试
 
 ```sh
-cd cli && bun run typecheck && bun run build && ./dist/jj-plan-macos-arm64 --version # CLI 验证
+cd cli && cargo build --release && ./target/release/jj-plan --version # CLI 验证
 ```
 
 `--version` 输出须等于根 `VERSION`.
@@ -24,18 +24,19 @@ push `v*` tag 触发 Actions: 部署 Worker + 编译 CLI 二进制 (jj-plan + jj
 
 ## TL;DR
 
-1. 验证：`cd cli && bun run typecheck && bun run build`
+1. 验证：`cd cli && cargo build --release`
 2. 写版本：`VERSION` + `CHANGELOG.md` + `CHANGELOG.dev.md` 同步编辑 (与 tag 一致)
 3. 发布：commit + annotated tag (`-m`) + push branch + tag
-4. 修上版 bug：amend + 删远程 tag + 重打 + force push
+4. 本机自安装：`./scripts/install-local.sh` (源码 release 构建 → `~/.local/bin`)
+5. 修上版 bug：amend + 删远程 tag + 重打 + force push
 
 ## 1. 验证
 
 ```sh
-cd cli && bun run typecheck && bun run build && ./dist/jj-plan-macos-arm64 --version
+cd cli && cargo build --release && ./target/release/jj-plan --version
 ```
 
-`--version` 输出须等于根 `VERSION`. typecheck / build / version 任一失败 → 停止.
+`--version` 输出须等于根 `VERSION`. build / version 任一失败 → 停止.
 
 ## 2. 写版本
 
@@ -53,7 +54,15 @@ git push origin vX.Y.Z
 
 > tag MUST 带 message (`-m`): `tag.gpgsign=true` 会把 lightweight tag 强制升为签名 tag 但缺 message → fail.
 
-## 4. 修上版 bug
+## 4. 本机自安装
+
+发布后把刚发布的版本装到本机 (源码 release 构建, 与 tag 内容一致):
+
+```sh
+./scripts/install-local.sh   # cargo build --release + 装入 ~/.local/bin
+```
+
+## 5. 修上版 bug
 
 上版存在明显 bug 时, amend 修复后重新发布.
 

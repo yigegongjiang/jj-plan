@@ -2,7 +2,8 @@ name = "jj-plan"
 main = "src/index.ts"
 compatibility_date = "2026-05-01"
 
-# workers.dev 旁路入口关闭 (安全): 该 URL 绕过 Cloudflare Access, 仅 bearer 兜底。
+# workers.dev 旁路入口关闭 (安全): 该 URL 绕过 Cloudflare Access, 缺边缘注入的
+# Access JWT 会被 Worker 一律 401 (已无 bearer 兜底), 关闭以杜绝混淆。
 # 只经受 Access 保护的自定义域访问。IaC 而非面板切换 —— 面板 off 会被下次部署
 # 按 wrangler 默认 (true) 重置。workers_dev = 生产 <name>.workers.dev;
 # preview_urls = <version>-<name>.workers.dev 预览 URL。
@@ -17,7 +18,8 @@ preview_urls = false
 directory = "../web/out"
 
 # Cloudflare Access (Google SSO) for the browser dashboard. When BOTH are set,
-# protected routes also accept a valid Access JWT (browser); unset = bearer-only.
+# protected routes require a valid Access JWT (the only auth path); if unset,
+# every protected request 401s.
 # Neither value is a secret (team domain is public, AUD is an app-audience
 # identifier — a request still needs a Cloudflare-signed JWT for this AUD, which
 # requires passing the Access policy), so plain committed [vars] is the standard

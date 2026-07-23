@@ -7,13 +7,8 @@ import { ulid } from './ulid';
 
 type Bindings = {
   DB: D1Database;
-  // Legacy bearer token, optional. Production no longer sets it — both the CLI
-  // (Access service token) and the dashboard (Google SSO) authenticate via a
-  // Cloudflare Access JWT. Kept only as an optional fallback and for the test
-  // suite's bearer-based auth; when absent (prod) the bearer branch is skipped.
-  JJPLAN_TOKEN?: string;
-  // Cloudflare Access (Google SSO / service token). Protected routes accept a
-  // valid Access JWT; set in prod, so Access is the real auth path.
+  // Cloudflare Access (Google SSO for the dashboard, service token for the CLI).
+  // Protected routes accept a valid Access JWT; both are set in prod.
   CF_ACCESS_TEAM_DOMAIN?: string; // https://<team>.cloudflareaccess.com
   CF_ACCESS_AUD?: string; // Access application AUD tag
 };
@@ -81,23 +76,13 @@ const app = new Hono<{ Bindings: Bindings }>();
 
 // ---------- auth ----------
 
-// Dual-credential auth on every protected route:
-//   1. Cloudflare Access JWT — the real path in production. Both the CLI (via
-//      an Access service token) and the dashboard (Google SSO) arrive as an
-//      Access JWT. Checked when CF_ACCESS_* env is present.
-//   2. Bearer token == JJPLAN_TOKEN — legacy/optional fallback, and what the
-//      test suite uses. Absent in production (no secret set), so the branch is
-//      skipped and auth flows through Access.
-//
-// The Access JWT arrives either as the Cf-Access-Jwt-Assertion header (on paths
-// Access enforces) or, on a bypassed API path, as the CF_Authorization cookie
-// the browser sends same-origin. We accept either and verify against the team's
-// rotating JWKS with issuer + audience (AUD) pinned, so a token minted for any
-// other Access app in the same team is rejected.
-//
-// Bearer is checked first and cheaply (string compare) when a token is set, so
-// it never triggers a JWKS fetch. Any missing/incorrect credential is a 401 —
-// matching the bearerAuth behaviour the test suite pins.
+// Cloudflare Access JWT on every protected route — the only auth path. The CLI
+// arrives via an Access service token, the dashboard via Google SSO; both reach
+// the worker as an Access JWT. It comes as the Cf-Access-Jwt-Assertion header
+// (paths Access enforces) or the CF_Authorization cookie (same-origin browser).
+// We verify against the team's rotating JWKS with issuer + audience (AUD)
+// pinned, so a token minted for any other Access app in the same team is
+// rejected. Any missing / invalid credential is a 401.
 
 // Isolate-scoped JWKS, keyed by team domain. createRemoteJWKSet caches keys and
 // refetches on rotation (unknown kid), so one instance serves all requests.
@@ -110,11 +95,6 @@ function accessJwks(teamDomain: string): JWTVerifyGetKey {
 }
 
 const authMiddleware: MiddlewareHandler<{ Bindings: Bindings }> = async (c, next) => {
-  const expected = c.env.JJPLAN_TOKEN;
-  if (expected && c.req.header('Authorization') === `Bearer ${expected}`) {
-    return next();
-  }
-
   const teamDomain = c.env.CF_ACCESS_TEAM_DOMAIN;
   const aud = c.env.CF_ACCESS_AUD;
   if (teamDomain && aud) {

@@ -13,6 +13,17 @@
 
 > 历史 27 版 (≤ 0.8.23) 在双文件分界确立前写成, 含文件/函数级细节, 原文照搬未回填; 用户向精简严格自 **0.8.24** 起执行.
 
+## [0.15.0] - 2026-07-23
+
+### Changed
+
+- CLI 由 Bun/TypeScript 迁移为 Rust 原生实现; 命令 / 参数 / stdin / 输出 / 安装与更新方式完全不变, 调用方无需改动。
+- 网络安装脚本迁至 `scripts/install.sh` (curl 地址随之变更, 见上方安装命令)。0.14.x 及更早二进制的 `update` 指向旧地址会失败, 需用新地址重装一次。
+
+### Removed
+
+- 移除 bearer token 认证; CLI 与 Worker 统一走 Cloudflare Access (CLI 用 service token)。仅配了 `token` 的旧配置需改为 `cf_access_client_id` + `cf_access_client_secret` (该模式本就无法通过生产的 Access 网关)。
+
 ## [0.14.0] - 2026-07-23
 
 ### Changed (BREAKING — CLI 命令改名)
