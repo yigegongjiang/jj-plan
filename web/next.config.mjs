@@ -1,5 +1,5 @@
 /** @type {import('next').NextConfig} */
-const REMOTE = process.env.JJPLAN_REMOTE || "https://jjplan.yigegongjiang.com";
+const REMOTE = process.env.JJ_PLAN_REMOTE || "https://jj-plan.yigegongjiang.com";
 
 const isProd = process.env.NODE_ENV === "production";
 
