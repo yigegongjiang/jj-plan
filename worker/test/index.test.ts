@@ -5,7 +5,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import worker from '../src/index';
 
 // =============================================================================
-// jjplan worker — full boundary suite.
+// jj-plan worker — full boundary suite.
 //
 // Goal: pin down EVERY decision branch in worker/src/index.ts.
 // Strategy: hit the worker's fetch handler directly (no HTTP server, no remote

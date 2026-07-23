@@ -5,7 +5,7 @@ import pkg from "./package.json" with { type: "json" };
 
 const VERSION = readFileSync(new URL("../VERSION", import.meta.url), "utf8").trim();
 const REPO = pkg.repository;
-const ENTRIES = ["jjplan", "jjask"] as const;
+const ENTRIES = ["jj-plan", "jj-ask"] as const;
 const ARCHES = ["x64", "arm64"] as const;
 
 async function cleanLeftovers(): Promise<void> {

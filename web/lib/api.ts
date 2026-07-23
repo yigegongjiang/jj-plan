@@ -19,7 +19,7 @@ export class ApiError extends Error {
 // No Authorization header: the browser authenticates via the Cloudflare Access
 // session cookie (CF_Authorization), sent automatically on same-origin requests
 // once the human clears Google SSO at the edge. The Worker validates it. The
-// CLI (jjplan / jjask) is the only client that still sends a bearer token.
+// CLI (jj-plan / jj-ask) is the only client that still sends a bearer token.
 async function request<T>(
   method: 'GET' | 'POST' | 'PATCH' | 'DELETE',
   path: string,

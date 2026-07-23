@@ -13,6 +13,14 @@
 
 > 历史 27 版 (≤ 0.8.23) 在双文件分界确立前写成, 含文件/函数级细节, 原文照搬未回填; 用户向精简严格自 **0.8.24** 起执行.
 
+## [0.14.0] - 2026-07-23
+
+### Changed (BREAKING — CLI 命令改名)
+
+- CLI 命令改名 `jjplan` → `jj-plan`, `jjask` → `jj-ask`; 旧命令名不再发布。需重装并更新所有调用方 (含全局 AI 规则里的命令名), 旧二进制自行 `rm`。
+- 配置迁移到 `~/.config/jj-plan/config.json`; 旧 `~/.config/jjplan` 与 `~/.jjplan` 仍作只读 fallback, 现有配置无需改动。
+- 服务端 (Worker / D1 / API / 数据) 与 dashboard 认证零变化, 已有数据全部保留。
+
 ## [0.13.0] - 2026-07-17
 
 ### Security

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# install.sh — install / update / uninstall jjplan + jjask from GitHub Releases.
+# install.sh — install / update / uninstall jj-plan + jj-ask from GitHub Releases.
 # One action covers both binaries; per-binary mode is not supported.
 #
 # Usage:
@@ -13,7 +13,7 @@ set -euo pipefail
 REPO="${REPO:-yigegongjiang/jj-plan}"
 VERSION="${VERSION:-latest}"
 INSTALL_DIR="${INSTALL_DIR:-$HOME/.local/bin}"
-BINARIES=(jjplan jjask)
+BINARIES=(jj-plan jj-ask)
 
 err()  { printf 'install.sh: %s\n' "$*" >&2; exit 1; }
 info() { printf '%s\n' "$*"; }
@@ -21,8 +21,8 @@ info() { printf '%s\n' "$*"; }
 usage() {
   cat <<'EOF'
 usage: install.sh [install|update|uninstall]
-  install/update: download jjplan + jjask
-  uninstall:      remove jjplan + jjask (config kept)
+  install/update: download jj-plan + jj-ask
+  uninstall:      remove jj-plan + jj-ask (config kept)
 env:
   REPO=<owner>/<repo>   default yigegongjiang/jj-plan
   VERSION=latest|vX.Y.Z default latest
@@ -110,13 +110,13 @@ esac
 
 if [ "$ACTION" = "uninstall" ]; then
   for n in "${BINARIES[@]}"; do uninstall_one "$n"; done
-  info "config kept: ${XDG_CONFIG_HOME:-${HOME}/.config}/jjplan/config.json (legacy ${HOME}/.jjplan/config.json still honoured)"
+  info "config kept: ${XDG_CONFIG_HOME:-${HOME}/.config}/jj-plan/config.json (legacy ${XDG_CONFIG_HOME:-${HOME}/.config}/jjplan + ${HOME}/.jjplan still honoured)"
   exit 0
 fi
 
 mkdir -p "$INSTALL_DIR"
 
-info "==> installing jjplan + jjask"
+info "==> installing jj-plan + jj-ask"
 info "    repo:    ${REPO}"
 info "    version: ${VERSION}"
 info "    arch:    darwin-${host_arch}"

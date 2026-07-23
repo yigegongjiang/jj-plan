@@ -1,5 +1,5 @@
 {
-  "name": "jjplan-worker",
+  "name": "jj-plan-worker",
   "private": true,
   "type": "module",
   "scripts": {

@@ -84,7 +84,7 @@ jobs:
         working-directory: cli
         run: bun run typecheck
 
-      - name: Compile macOS binaries (jjplan + jjask × x64 + arm64)
+      - name: Compile macOS binaries (jj-plan + jj-ask × x64 + arm64)
         working-directory: cli
         run: bun run build
 
@@ -92,7 +92,7 @@ jobs:
         working-directory: cli/dist
         run: |
           shopt -s nullglob
-          files=( jjplan-macos-* jjask-macos-* )
+          files=( jj-plan-macos-* jj-ask-macos-* )
           [ ${#files[@]} -gt 0 ] || { echo "no build artifacts found in cli/dist" >&2; exit 1; }
           sha256sum "${files[@]}" > checksums.txt
           cat checksums.txt
@@ -103,6 +103,6 @@ jobs:
           generate_release_notes: true
           fail_on_unmatched_files: true
           files: |
-            cli/dist/jjplan-macos-*
-            cli/dist/jjask-macos-*
+            cli/dist/jj-plan-macos-*
+            cli/dist/jj-ask-macos-*
             cli/dist/checksums.txt

@@ -80,7 +80,7 @@ const app = new Hono<{ Bindings: Bindings }>();
 // ---------- auth ----------
 
 // Dual-credential auth on every protected route:
-//   1. Bearer token == JJPLAN_TOKEN — the CLI (jjplan / jjask). Stable contract.
+//   1. Bearer token == JJPLAN_TOKEN — the CLI (jj-plan / jj-ask). Stable contract.
 //   2. Cloudflare Access JWT — the browser dashboard, once the human clears
 //      Google SSO at the edge. Only checked when CF_ACCESS_* env is present.
 //

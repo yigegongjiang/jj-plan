@@ -1,4 +1,4 @@
-// Shared helpers for jjplan + jjask binaries.
+// Shared helpers for jj-plan + jj-ask binaries.
 // Flat module, no submodules. Each binary entry imports what it needs.
 import { parseArgs } from 'node:util';
 import { existsSync, readFileSync } from 'node:fs';
@@ -11,23 +11,30 @@ import { execSync } from 'node:child_process';
 declare const JJ_VERSION: string | undefined;
 declare const JJ_REPO: string | undefined;
 
-// Config lives at $XDG_CONFIG_HOME/jjplan/config.json (XDG Base Directory,
-// default ~/.config/jjplan/config.json). The legacy ~/.jjplan/config.json is
-// still honoured as a fallback so pre-0.12 installs keep working without a move.
+// Config lives at $XDG_CONFIG_HOME/jj-plan/config.json (XDG Base Directory,
+// default ~/.config/jj-plan/config.json). Two legacy paths stay honoured as
+// read-only fallbacks so older installs keep working without a move:
+//   - ~/.config/jjplan/config.json  (0.12–0.13, pre-rename XDG path)
+//   - ~/.jjplan/config.json         (pre-0.12)
 const XDG_CONFIG_HOME = process.env.XDG_CONFIG_HOME;
 const CONFIG_HOME =
   XDG_CONFIG_HOME && XDG_CONFIG_HOME.length > 0
     ? XDG_CONFIG_HOME
     : join(homedir(), '.config');
-export const CONFIG_PATH = join(CONFIG_HOME, 'jjplan', 'config.json');
-const LEGACY_CONFIG_PATH = join(homedir(), '.jjplan', 'config.json');
+export const CONFIG_PATH = join(CONFIG_HOME, 'jj-plan', 'config.json');
+const LEGACY_CONFIG_PATHS = [
+  join(CONFIG_HOME, 'jjplan', 'config.json'),
+  join(homedir(), '.jjplan', 'config.json'),
+];
 
-// Canonical path wins; legacy is read only when canonical is absent. Returns
-// the canonical path when neither exists so error messages point users at the
-// path they should create.
+// Canonical path wins; legacy paths are read only when canonical is absent, in
+// order (newest first). Returns the canonical path when none exist so error
+// messages point users at the path they should create.
 function resolveConfigPath(): string {
   if (existsSync(CONFIG_PATH)) return CONFIG_PATH;
-  if (existsSync(LEGACY_CONFIG_PATH)) return LEGACY_CONFIG_PATH;
+  for (const p of LEGACY_CONFIG_PATHS) {
+    if (existsSync(p)) return p;
+  }
   return CONFIG_PATH;
 }
 
@@ -258,7 +265,7 @@ export function requireId(
 export function runInstaller(entry: string, args: string[]): void {
   const isUninstall = args.includes('--uninstall');
   // Refuse update when the running executable is not the installed binary
-  // (e.g. `bun run src/jjplan.ts update` resolves execPath to bun itself).
+  // (e.g. `bun run src/jj-plan.ts update` resolves execPath to bun itself).
   // Uninstall is harmless — it just clears ~/.local/bin/<entry>, so allow it.
   if (!isUninstall && basename(process.execPath) !== entry) {
     die(

@@ -5,7 +5,7 @@ const VERSION = process.env.NEXT_PUBLIC_JJ_VERSION ?? 'dev';
 
 export const metadata: Metadata = {
   title: 'JJ',
-  description: 'jjplan dashboard',
+  description: 'jj-plan dashboard',
 };
 
 export const viewport: Viewport = {

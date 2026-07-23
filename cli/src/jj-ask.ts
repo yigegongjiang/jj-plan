@@ -1,4 +1,4 @@
-// jjask binary: Q&A (human ask) logging.
+// jj-ask binary: Q&A (human ask) logging.
 import {
   api,
   die,
@@ -14,19 +14,19 @@ import {
   ASK_LIMIT_MAX,
 } from './shared';
 
-const ENTRY = 'jjask';
+const ENTRY = 'jj-ask';
 const VERSION = resolveVersion();
 
 const USAGE = {
-  help: 'jjask --help',
-  version: 'jjask --version',
-  update: 'jjask update | upgrade',
-  uninstall: 'jjask uninstall',
-  'ask.new': 'jjask new <project> <body>',
-  'ask.ls': `jjask ls <project> [--limit N]   (default ${ASK_LIMIT_DEFAULT}, max ${ASK_LIMIT_MAX})`,
-  'ask.show': 'jjask show <id>',
-  'ask.set': 'jjask set <id> --body <body>',
-  'ask.rm': 'jjask rm <id>',
+  help: 'jj-ask --help',
+  version: 'jj-ask --version',
+  update: 'jj-ask update | upgrade',
+  uninstall: 'jj-ask uninstall',
+  'ask.new': 'jj-ask new <project> <body>',
+  'ask.ls': `jj-ask ls <project> [--limit N]   (default ${ASK_LIMIT_DEFAULT}, max ${ASK_LIMIT_MAX})`,
+  'ask.show': 'jj-ask show <id>',
+  'ask.set': 'jj-ask set <id> --body <body>',
+  'ask.rm': 'jj-ask rm <id>',
 } as const;
 
 type UsageKey = keyof typeof USAGE;
@@ -158,16 +158,16 @@ const commands: Record<string, Handler> = {
 
 function printHelp(): void {
   process.stdout.write(
-    `jjask ${VERSION}
+    `jj-ask ${VERSION}
 
 # TLDR
-jjask: 落盘人类抛给 AI 的请求 (Q&A 记录). 两层模型 project -> ask, id=ULID. <project>=cwd basename.
+jj-ask: 落盘人类抛给 AI 的请求 (Q&A 记录). 两层模型 project -> ask, id=ULID. <project>=cwd basename.
 每条 ask 都是独立记录, 不串链.
 
-  jjask new <project> <body>
+  jj-ask new <project> <body>
     # body=用户原话原文照搬.
 
-输出: stdout 单行 JSON. body 不读 stdin (位置参数). 查询/修改/删除见 jjask --help.
+输出: stdout 单行 JSON. body 不读 stdin (位置参数). 查询/修改/删除见 jj-ask --help.
 
 # PURPOSE
 落盘人类抛给 AI 的请求.
@@ -179,27 +179,27 @@ project (name) -- ask (id=ULID)
 - project rm 级联删全部 ask.
 
 # I/O
-- 输出: stdout 单行 JSON; DELETE 空 (204). 错误: stderr \`jjask: <msg>\` + 非零 exit.
+- 输出: stdout 单行 JSON; DELETE 空 (204). 错误: stderr \`jj-ask: <msg>\` + 非零 exit.
 - <body> / --body 是位置/flag 参数, 不读 stdin.
 - 限长 (chars): body 1..${MAX_BODY_LEN}, project 1..${MAX_PROJECT_NAME_LEN}.
 
 # COMMANDS
 
-jjask --help | --version
-jjask update | upgrade | uninstall       仅在用户明确要求时执行 (同时影响 jjplan; update/upgrade 等价)
+jj-ask --help | --version
+jj-ask update | upgrade | uninstall       仅在用户明确要求时执行 (同时影响 jj-plan; update/upgrade 等价)
 
-jjask new <project> <body>
+jj-ask new <project> <body>
   -> {id, project_id, body, created_at, updated_at}
-jjask ls <project> [--limit N]   (default ${ASK_LIMIT_DEFAULT}, max ${ASK_LIMIT_MAX}, by updated_at DESC)
+jj-ask ls <project> [--limit N]   (default ${ASK_LIMIT_DEFAULT}, max ${ASK_LIMIT_MAX}, by updated_at DESC)
   -> [{...ask}]
   err: 404
-jjask show <id>
+jj-ask show <id>
   -> {...ask}
   err: 404
-jjask set <id> --body <body>
+jj-ask set <id> --body <body>
   -> {...ask}
   err: 400 | 404
-jjask rm <id>
+jj-ask rm <id>
   err: 404
 `,
   );

@@ -6,9 +6,9 @@
 - NEVER 写「开发」段 (VibeCoding 不向人类解释 dev 命令)
 ```
 
-# `jjplan`
+# `jj-plan`
 
-AI 专用 Spec/Task/Ask 追踪系统 (macOS only, x64 + arm64). 数据存 Cloudflare D1 (Worker); 两个本地 CLI (`jjplan` + `jjask`) 共用 endpoint + 凭证.
+AI 专用 Spec/Task/Ask 追踪系统 (macOS only, x64 + arm64). 数据存 Cloudflare D1 (Worker); 两个本地 CLI (`jj-plan` + `jj-ask`) 共用 endpoint + 凭证.
 
 ## 使用
 
@@ -16,7 +16,7 @@ AI 专用 Spec/Task/Ask 追踪系统 (macOS only, x64 + arm64). 数据存 Cloudf
 curl -fsSL https://raw.githubusercontent.com/yigegongjiang/jj-plan/main/install.sh | bash
 ```
 
-一键安装 `jjplan` + `jjask` 到 `$HOME/.local/bin/`. 配置 `~/.config/jjplan/config.json` (遵循 XDG, 尊重 `$XDG_CONFIG_HOME`; 旧路径 `~/.jjplan/config.json` 仍作 fallback): `endpoint` + 凭证 (bearer `token`, 或 Cloudflare Access service token `cf_access_client_id` + `cf_access_client_secret`). `jjplan --help` / `jjask --help` 查看命令; dashboard 经 Cloudflare Access (Google) 登录.
+一键安装 `jj-plan` + `jj-ask` 到 `$HOME/.local/bin/`. 配置 `~/.config/jj-plan/config.json` (遵循 XDG, 尊重 `$XDG_CONFIG_HOME`; 旧路径 `~/.config/jjplan` 与 `~/.jjplan` 仍作只读 fallback): `endpoint` + 凭证 (bearer `token`, 或 Cloudflare Access service token `cf_access_client_id` + `cf_access_client_secret`). `jj-plan --help` / `jj-ask --help` 查看命令; dashboard 经 Cloudflare Access (Google) 登录.
 
 ## 架构
 
@@ -29,6 +29,6 @@ curl -fsSL https://raw.githubusercontent.com/yigegongjiang/jj-plan/main/install.
 <!-- prettier-ignore -->
 | 目录 | 职责 |
 |---|---|
-| `cli/` | CLI 二进制 (`jjplan` + `jjask`), Bun + TypeScript |
+| `cli/` | CLI 二进制 (`jj-plan` + `jj-ask`), Bun + TypeScript |
 | `worker/` | Cloudflare Worker + D1 migrations |
 | `web/` | Next.js dashboard SPA (静态导出) |

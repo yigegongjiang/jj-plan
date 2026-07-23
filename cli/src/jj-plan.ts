@@ -1,4 +1,4 @@
-// jjplan binary: project/spec/task workflow.
+// jj-plan binary: project/spec/task workflow.
 import {
   api,
   die,
@@ -20,25 +20,25 @@ import {
   MAX_PROJECT_NAME_LEN,
 } from './shared';
 
-const ENTRY = 'jjplan';
+const ENTRY = 'jj-plan';
 const VERSION = resolveVersion();
 
 const USAGE = {
-  help: 'jjplan --help',
-  version: 'jjplan --version',
-  update: 'jjplan update | upgrade',
-  uninstall: 'jjplan uninstall',
-  'project.ls': 'jjplan project ls',
-  'project.rm': 'jjplan project rm <name>',
-  'spec.new': 'jjplan spec new <project> <title> [--after <prev_spec_id>]',
-  'spec.ls': 'jjplan spec ls <project>',
-  'spec.show': 'jjplan spec show <id>',
-  'spec.set': `jjplan spec set <id> [--title T] [--body B] [--status ${SPEC_STATUSES.join('|')}]`,
-  'spec.rm': 'jjplan spec rm <id>',
-  'task.new': 'jjplan task new <spec_id> <title> [--after <prev_task_id>]',
-  'task.ls': 'jjplan task ls <spec_id>',
-  'task.set': `jjplan task set <id> [--title T] [--body B] [--status ${TASK_STATUSES.join('|')}]`,
-  'task.rm': 'jjplan task rm <id>',
+  help: 'jj-plan --help',
+  version: 'jj-plan --version',
+  update: 'jj-plan update | upgrade',
+  uninstall: 'jj-plan uninstall',
+  'project.ls': 'jj-plan project ls',
+  'project.rm': 'jj-plan project rm <name>',
+  'spec.new': 'jj-plan spec new <project> <title> [--after <prev_spec_id>]',
+  'spec.ls': 'jj-plan spec ls <project>',
+  'spec.show': 'jj-plan spec show <id>',
+  'spec.set': `jj-plan spec set <id> [--title T] [--body B] [--status ${SPEC_STATUSES.join('|')}]`,
+  'spec.rm': 'jj-plan spec rm <id>',
+  'task.new': 'jj-plan task new <spec_id> <title> [--after <prev_task_id>]',
+  'task.ls': 'jj-plan task ls <spec_id>',
+  'task.set': `jj-plan task set <id> [--title T] [--body B] [--status ${TASK_STATUSES.join('|')}]`,
+  'task.rm': 'jj-plan task rm <id>',
 } as const;
 
 type UsageKey = keyof typeof USAGE;
@@ -191,18 +191,18 @@ const commands: Record<string, Handler> = {
 
 function printHelp(): void {
   process.stdout.write(
-    `jjplan ${VERSION}
+    `jj-plan ${VERSION}
 
 # TLDR
-jjplan: AI 用的 Spec/Task 跟踪 CLI. 三层模型 project -> spec -> task, id=ULID. <project>=cwd basename.
+jj-plan: AI 用的 Spec/Task 跟踪 CLI. 三层模型 project -> spec -> task, id=ULID. <project>=cwd basename.
 循环: 写 spec 立计划 -> 拆 task -> 推 task status (todo/doing/done/blocked) -> 所有 task done 后 spec set done.
 
-  jjplan spec new <project> <title>     # body 从 stdin 读; project 不存在自动建
-  jjplan task new <spec_id> <title>     # body 从 stdin 读; 默认追加链尾, --after <id> 中间插
-  jjplan task set <id> --status <s>     # 亦可改 --title/--body
-  jjplan spec set <id> --status done    # 收尾, 需所有 task 已 done
+  jj-plan spec new <project> <title>     # body 从 stdin 读; project 不存在自动建
+  jj-plan task new <spec_id> <title>     # body 从 stdin 读; 默认追加链尾, --after <id> 中间插
+  jj-plan task set <id> --status <s>     # 亦可改 --title/--body
+  jj-plan spec set <id> --status done    # 收尾, 需所有 task 已 done
 
-输出: stdout 单行 JSON. 查询/删除/错误码/链语义见 jjplan --help.
+输出: stdout 单行 JSON. 查询/删除/错误码/链语义见 jj-plan --help.
 
 # PURPOSE
 为 AI 设计的 Spec/Task 跟踪 CLI.
@@ -216,49 +216,49 @@ project (name, 主键) -- spec (id=ULID) -- task (id=ULID)
 
 # I/O
 - 输出: stdout 单行 JSON; DELETE 返回空 (HTTP 204).
-- 错误: stderr 单行 \`jjplan: <msg>\` + 非零 exit; 客户端不重试.
+- 错误: stderr 单行 \`jj-plan: <msg>\` + 非零 exit; 客户端不重试.
 - new 命令的 body 从 stdin 读 (无 stdin = 空 body); set 改 body 用 --body flag, 整体覆盖.
 - id 一律 ULID, 必须从响应 JSON 取, 不可构造或截断.
 - 限长 (chars): title 1..${MAX_TITLE_LEN}, body 0..${MAX_BODY_LEN}, project 1..${MAX_PROJECT_NAME_LEN}.
 
 # COMMANDS
 
-jjplan --help | --version
-jjplan update | upgrade | uninstall     仅在用户明确要求时执行 (同时影响 jjask; update/upgrade 等价)
+jj-plan --help | --version
+jj-plan update | upgrade | uninstall     仅在用户明确要求时执行 (同时影响 jj-ask; update/upgrade 等价)
 
-jjplan project ls
+jj-plan project ls
   -> [{name, created_at, updated_at, specs:[{...spec, tasks:[...task]}]}]
-jjplan project rm <name>
+jj-plan project rm <name>
   err: 404
 
-jjplan spec new <project> <title> [--after <prev_spec_id>]
+jj-plan spec new <project> <title> [--after <prev_spec_id>]
   -> {id, project_id, title, body, status:"active", prev_id, created_at, updated_at}
   err: 400 prev 跨项目/不存在 | 409 prev 已有后继
-jjplan spec ls <project>
+jj-plan spec ls <project>
   -> [{...spec, tasks:[...task]}]   (链序)
   err: 404
-jjplan spec show <id>
+jj-plan spec show <id>
   -> {...spec, tasks:[...task]}
   err: 404
-jjplan spec set <id> [--title T] [--body B] [--status ${SPEC_STATUSES.join('|')}]
+jj-plan spec set <id> [--title T] [--body B] [--status ${SPEC_STATUSES.join('|')}]
   至少传一个 flag.
   -> {...spec}
   err: 400 无 flag/status 非法 | 404
-jjplan spec rm <id>
+jj-plan spec rm <id>
   err: 404 | 409 并发
 
-jjplan task new <spec_id> <title> [--after <prev_task_id>]
+jj-plan task new <spec_id> <title> [--after <prev_task_id>]
   不传 --after 追加链尾.
   -> {id, spec_id, title, body, status:"todo", prev_id, created_at, updated_at}
   err: 400 prev 跨 spec/不存在 | 404 spec 不存在 (仅无 --after 时) | 409 并发
-jjplan task ls <spec_id>
+jj-plan task ls <spec_id>
   -> [...task]   (链序)
   err: 404
-jjplan task set <id> [--title T] [--body B] [--status ${TASK_STATUSES.join('|')}]
+jj-plan task set <id> [--title T] [--body B] [--status ${TASK_STATUSES.join('|')}]
   至少传一个 flag.
   -> {...task}
   err: 400 | 404
-jjplan task rm <id>
+jj-plan task rm <id>
   err: 404 | 409 并发
 
 # STATUS
@@ -303,7 +303,7 @@ async function main(): Promise<void> {
 
   const [noun, verb, ...rest] = argv;
   if (noun === 'ask') {
-    fail(`'ask' is a jjask command; run 'jjask ${verb ?? '--help'}' instead`);
+    fail(`'ask' is a jj-ask command; run 'jj-ask ${verb ?? '--help'}' instead`);
   }
   const handler = commands[`${noun}.${verb}`];
   if (!handler) {

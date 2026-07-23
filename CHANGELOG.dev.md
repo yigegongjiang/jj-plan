@@ -9,6 +9,18 @@
 
 > 历史 27 版 (≤ 0.8.23) 在双文件分界确立前写成, 原文照搬未回填; 用户向 / 开发向严格分界自 **0.8.24** 起执行.
 
+## [0.14.0] - 2026-07-23
+
+### Changed (BREAKING — CLI 命令改名)
+
+- CLI 命令改名 `jjplan` → `jj-plan`, `jjask` → `jj-ask`; 旧命令名不再发布。需重装并更新所有调用方 (含全局 AI 规则里的命令名), 旧二进制自行 `rm`。
+  - `cli/build.ts` `ENTRIES` = `["jj-plan","jj-ask"]`; 源文件 `git mv` → `cli/src/jj-plan.ts` / `jj-ask.ts`; 各 `ENTRY` 常量 + USAGE/help 文本全改名。
+  - `install.sh` `BINARIES` + `.github/workflows/release.yml` 产物 glob/文案改名; Release 只发 `jj-plan-macos-*` / `jj-ask-macos-*`。
+  - `package.json` name (`jj-plan-cli`/`-web`/`-worker`) + web 文案 (dashboard description / ask 检索 placeholder / `localStorage` key `jj-plan_project_tab`) 同步。
+  - 保留 (基础设施标识符, 改名会中断已部署服务): Worker `name` / D1 `database_name` = `jjplan`, secret `JJPLAN_TOKEN`, 生产域名 `jjplan.yigegongjiang.com`。
+- 配置迁移到 `~/.config/jj-plan/config.json`; 旧 `~/.config/jjplan` 与 `~/.jjplan` 仍作只读 fallback, 现有配置无需改动。
+  - `cli/src/shared.ts`: `CONFIG_PATH` 换 `jj-plan`; `LEGACY_CONFIG_PATH` 扩为 `LEGACY_CONFIG_PATHS` 数组 (`~/.config/jjplan` → `~/.jjplan`), `resolveConfigPath()` 按序只读回退, 无运行时搬迁。
+
 ## [0.13.0] - 2026-07-17
 
 ### Security
