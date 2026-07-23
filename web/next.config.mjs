@@ -1,14 +1,34 @@
-/** @type {import('next').NextConfig} */
-const REMOTE = process.env.JJ_PLAN_REMOTE || "https://jj-plan.yigegongjiang.com";
+import { readFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
 
+/** @type {import('next').NextConfig} */
 const isProd = process.env.NODE_ENV === "production";
 
-// Production (`next build`) emits a static export consumed by the Worker
-// [assets] binding — same-origin in prod, no proxy needed.
-// Dev (`next dev`) instead exposes a reverse proxy so `api.ts` keeps using
-// relative paths while talking to the deployed worker. Splitting the two
-// branches keeps `rewrites` off the prod config entirely (next warns about
-// it as long as the field is present, even when it returns []).
+// Dev-only reverse-proxy target. Production (`next build`) is a static export
+// served same-origin by the Worker, so no host is baked in. For `next dev` we
+// reuse the CLI's own config endpoint (single source of truth — whoever deploys
+// points their own config.json there), with an env override and a local
+// wrangler-dev fallback. No production domain is hardcoded anywhere.
+function devRemote() {
+  if (process.env.JJ_PLAN_REMOTE) return process.env.JJ_PLAN_REMOTE;
+  const configHome = process.env.XDG_CONFIG_HOME || join(homedir(), ".config");
+  const candidates = [
+    join(configHome, "jj-plan", "config.json"),
+    join(configHome, "jjplan", "config.json"),
+    join(homedir(), ".jjplan", "config.json"),
+  ];
+  for (const p of candidates) {
+    try {
+      const { endpoint } = JSON.parse(readFileSync(p, "utf8"));
+      if (endpoint) return endpoint;
+    } catch {
+      // next candidate
+    }
+  }
+  return "http://127.0.0.1:8787"; // wrangler dev default
+}
+
 const config = isProd
   ? {
       output: "export",
@@ -16,20 +36,23 @@ const config = isProd
       images: { unoptimized: true },
       reactStrictMode: true,
     }
-  : {
-      trailingSlash: true,
-      images: { unoptimized: true },
-      reactStrictMode: true,
-      async rewrites() {
-        return [
-          { source: "/projects", destination: `${REMOTE}/projects` },
-          { source: "/projects/:p*", destination: `${REMOTE}/projects/:p*` },
-          { source: "/specs/:p*", destination: `${REMOTE}/specs/:p*` },
-          { source: "/tasks/:p*", destination: `${REMOTE}/tasks/:p*` },
-          { source: "/asks", destination: `${REMOTE}/asks` },
-          { source: "/asks/:p*", destination: `${REMOTE}/asks/:p*` },
-        ];
-      },
-    };
+  : (() => {
+      const REMOTE = devRemote();
+      return {
+        trailingSlash: true,
+        images: { unoptimized: true },
+        reactStrictMode: true,
+        async rewrites() {
+          return [
+            { source: "/projects", destination: `${REMOTE}/projects` },
+            { source: "/projects/:p*", destination: `${REMOTE}/projects/:p*` },
+            { source: "/specs/:p*", destination: `${REMOTE}/specs/:p*` },
+            { source: "/tasks/:p*", destination: `${REMOTE}/tasks/:p*` },
+            { source: "/asks", destination: `${REMOTE}/asks` },
+            { source: "/asks/:p*", destination: `${REMOTE}/asks/:p*` },
+          ];
+        },
+      };
+    })();
 
 export default config;
